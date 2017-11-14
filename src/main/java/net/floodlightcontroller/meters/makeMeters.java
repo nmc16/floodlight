@@ -21,6 +21,8 @@ import net.floodlightcontroller.core.module.FloodlightModuleContext;
 import net.floodlightcontroller.core.module.FloodlightModuleException;
 import net.floodlightcontroller.core.module.IFloodlightModule;
 import net.floodlightcontroller.core.module.IFloodlightService;
+import net.floodlightcontroller.staticentry.IStaticEntryPusherService;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,7 +54,8 @@ public class makeMeters implements IOFSwitchListener, IFloodlightModule {
 	    Collection<Class<? extends IFloodlightService>> l =
 	        new ArrayList<Class<? extends IFloodlightService>>();
 	    l.add(IFloodlightProviderService.class);
-	    return l;
+		l.add(IOFSwitchService.class);
+return l;
 	}
 	
 	@Override
@@ -60,57 +63,75 @@ public class makeMeters implements IOFSwitchListener, IFloodlightModule {
 	    floodlightProvider = context.getServiceImpl(IFloodlightProviderService.class);
 	    macAddresses = new ConcurrentSkipListSet<Long>();
 	    logger = LoggerFactory.getLogger(makeMeters.class);
+	    switchService = context.getServiceImpl(IOFSwitchService.class);
 	    logger.info("*** I HAVE STARTED THE SWITCH **");
 	}
 
 	@Override
 	public void startUp(FloodlightModuleContext context) {
 	    //floodlightProvider.addOFMessageListener(OFType.PACKET_IN, this);
-		switchService.addOFSwitchListener(this);
+		//logger.info("*** I HAVE STARTED THE SWITCH **");
 	}
 
 	@Override
 	public void switchAdded(DatapathId switchId) {
 		// going to add meter stuff in here
-		System.out.println("****ADDING A SWITCH");
+		System.out.println("This is the swutch info");
+		logger.info("*** This is the switch info **");	
 		IOFSwitch mySwitch = switchService.getSwitch(switchId);
 		System.out.println(mySwitch);		
+		logger.info("*** This is the switch info **");	
 	}
 	
 	@Override
 	public void switchRemoved(DatapathId switchId) {
 		// going to add meter stuff in here
-		System.out.println("****ADDING A SWITCH");
+		System.out.println("This is the swutch info");
+		logger.info("*** This is the switch info **");	
 		IOFSwitch mySwitch = switchService.getSwitch(switchId);
-		System.out.println(mySwitch);	
+		System.out.println(mySwitch);		
+		logger.info("*** This is the switch info **");	
 
 	}
 
 	@Override
 	public void switchActivated(DatapathId switchId) {
 		// going to add meter stuff in here
-		System.out.println("****ADDING A SWITCH");
+		System.out.println("This is the swutch info");
+		logger.info("*** This is the switch info **");	
 		IOFSwitch mySwitch = switchService.getSwitch(switchId);
-		System.out.println(mySwitch);	
+		System.out.println(mySwitch);		
+		logger.info("*** This is the switch info **");	
 	}
 
 	@Override
 	public void switchPortChanged(DatapathId switchId, OFPortDesc port, PortChangeType type) {
 		// going to add meter stuff in here
-		System.out.println("****ADDING A SWITCH");
+		System.out.println("This is the swutch info");
+		logger.info("*** This is the switch info **");	
 		IOFSwitch mySwitch = switchService.getSwitch(switchId);
-		System.out.println(mySwitch);	
+		System.out.println(mySwitch);		
+		logger.info("*** This is the switch info **");	
 	}
 
 	@Override
 	public void switchChanged(DatapathId switchId) {
-		// TODO Auto-generated method stub
-
+		// going to add meter stuff in here
+		System.out.println("This is the swutch info");
+		logger.info("*** This is the switch info **");	
+		IOFSwitch mySwitch = switchService.getSwitch(switchId);
+		System.out.println(mySwitch);		
+		logger.info("*** This is the switch info **");	
 	}
 
 	@Override
 	public void switchDeactivated(DatapathId switchId) {
-		// TODO Auto-generated method stub
+		// going to add meter stuff in here
+		System.out.println("This is the swutch info");
+		logger.info("*** This is the switch info **");	
+		IOFSwitch mySwitch = switchService.getSwitch(switchId);
+		System.out.println(mySwitch);		
+		logger.info("*** This is the switch info **");	
 
 	}
 
