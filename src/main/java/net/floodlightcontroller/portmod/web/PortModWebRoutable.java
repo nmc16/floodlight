@@ -1,7 +1,6 @@
 package net.floodlightcontroller.portmod.web;
 
 import net.floodlightcontroller.restserver.RestletRoutable;
-import net.floodlightcontroller.portmod.web.CreatePortModResource;
 
 import org.restlet.Context;
 import org.restlet.Restlet;
