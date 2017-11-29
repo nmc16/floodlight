@@ -10,8 +10,7 @@ public class PortModWebRoutable implements RestletRoutable {
 
 	@Override
 	public Restlet getRestlet(Context context) {
-		// TODO Auto-generated method stub
-		
+
 		Router router = new Router(context);
 		
 		router.attach("/create/{switch}/{port}/json", CreatePortModResource.class);
@@ -20,8 +19,6 @@ public class PortModWebRoutable implements RestletRoutable {
 
 	@Override
 	public String basePath() {
-		// TODO Auto-generated method stub
 		return "/wm/portmod";
 	}
-
 }

@@ -13,7 +13,6 @@ import net.floodlightcontroller.portmod.web.PortModWebRoutable;
 import net.floodlightcontroller.restserver.IRestApiService;
 
 import org.projectfloodlight.openflow.protocol.OFPortConfig;
-import org.projectfloodlight.openflow.protocol.OFPortDesc;
 import org.projectfloodlight.openflow.protocol.OFPortMod;
 import org.projectfloodlight.openflow.types.DatapathId;
 import org.projectfloodlight.openflow.types.OFPort;
@@ -98,13 +97,19 @@ public class PortModManager implements IFloodlightModule, IPortModService {
     @Override
     public OFPortMod createPortMod(DatapathId dpid, OFPort port, OFPortConfig config) throws PortModException {
 
-	    // Check if port modification already exists on the port. If it does we can skip it, otherwise we add it
+	    // Check we can work with our arguments
+        if (dpid == null || port == null || config == null) {
+            String err = "Port modification cannot be created with uninitialized data: dpid=" + dpid + "port=" + port +
+                         "config=" + config;
 
-
+            LOG.error(err);
+            throw new PortModException(err);
+        }
 
         // If the switch does not have a reference we can't create the message
 	    IOFSwitch sw = this.switchService.getSwitch(dpid);
 	    if (sw == null) {
+	        LOG.error("Could not find DPID " + dpid.toString());
 	        throw new PortModException("Could not find DPID " + dpid.toString());
         }
 
@@ -116,17 +121,29 @@ public class PortModManager implements IFloodlightModule, IPortModService {
                                                             .getHwAddr())
                                                             .build();
 
-	    // Send the message
-        if (!sw.write(portMod)) {
-            throw new PortModException("Could not send message " + config.toString() + " to port " + port.toString() +
-                                       " on switch " + dpid.toString());
+        // Check if port modification already exists on the port. If it does we can skip it, otherwise we add it
+        ArrayList<OFPortConfig> portMods = this.currentMods.get(port);
+        if (portMods != null && portMods.contains(config)) {
+            LOG.info("Port {} already contains config {}, skipping message",
+                      new Object[] {port.toString(), config.toString()});
+            return portMod;
         }
 
+	    // Send the message
+        if (!sw.write(portMod)) {
+            String err = "Could not send message " + config.toString() + " to port " + port.toString() +
+                         " on switch " + dpid.toString();
+
+            LOG.error(err);
+            throw new PortModException(err);
+        }
+
+        LOG.info("Port successfully modified with: " + portMod.toString());
 	    return portMod;
     }
 
     @Override
-    public Collection<OFPortMod> retrievePortMods(OFPortDesc port) {
-        return null;
+    public Collection<OFPortConfig> retrievePortMods(OFPort port) {
+	    return this.currentMods.get(port);
     }
 }

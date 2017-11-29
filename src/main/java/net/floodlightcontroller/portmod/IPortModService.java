@@ -30,5 +30,5 @@ public interface IPortModService extends IFloodlightService {
      * @param port
      * @return
      */
-    public Collection<OFPortMod> retrievePortMods(OFPortDesc port);
+    public Collection<OFPortConfig> retrievePortMods(OFPort port);
 }
