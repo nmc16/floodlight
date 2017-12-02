@@ -2,12 +2,11 @@ package net.floodlightcontroller.portmod;
 
 import net.floodlightcontroller.core.module.IFloodlightService;
 import org.projectfloodlight.openflow.protocol.OFPortConfig;
-import org.projectfloodlight.openflow.protocol.OFPortDesc;
 import org.projectfloodlight.openflow.protocol.OFPortMod;
 import org.projectfloodlight.openflow.types.DatapathId;
 import org.projectfloodlight.openflow.types.OFPort;
 
-import java.util.Collection;
+import java.util.Set;
 
 /**
  *
@@ -23,12 +22,12 @@ public interface IPortModService extends IFloodlightService {
      * @param config Modification type (i.e. port down, no receive, etc.)
      * @return Port modification that can be applied on the switch's port
      */
-    public OFPortMod createPortMod(DatapathId dpid, OFPort port, OFPortConfig config) throws PortModException;
+    OFPortMod createPortMod(DatapathId dpid, OFPort port, OFPortConfig config) throws PortModException;
 
     /**
-     *
+     * TODO: Better to use database or better to send a message to switch? Not sure
      * @param port
      * @return
      */
-    public Collection<OFPortConfig> retrievePortMods(OFPort port);
+    Set<OFPortConfig> retrievePortMods(DatapathId dpid, OFPort port) throws PortModException;
 }

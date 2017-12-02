@@ -1,6 +1,9 @@
 package net.floodlightcontroller.portmod;
 
 import java.util.*;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import net.floodlightcontroller.core.IOFSwitch;
 import net.floodlightcontroller.core.internal.IOFSwitchService;
@@ -8,12 +11,11 @@ import net.floodlightcontroller.core.module.FloodlightModuleContext;
 import net.floodlightcontroller.core.module.FloodlightModuleException;
 import net.floodlightcontroller.core.module.IFloodlightModule;
 import net.floodlightcontroller.core.module.IFloodlightService;
-import net.floodlightcontroller.linkdiscovery.Link;
 import net.floodlightcontroller.portmod.web.PortModWebRoutable;
 import net.floodlightcontroller.restserver.IRestApiService;
+import net.floodlightcontroller.storage.IStorageSourceService;
 
-import org.projectfloodlight.openflow.protocol.OFPortConfig;
-import org.projectfloodlight.openflow.protocol.OFPortMod;
+import org.projectfloodlight.openflow.protocol.*;
 import org.projectfloodlight.openflow.types.DatapathId;
 import org.projectfloodlight.openflow.types.OFPort;
 import org.slf4j.Logger;
@@ -28,18 +30,21 @@ public class PortModManager implements IFloodlightModule, IPortModService {
 
 	// Class logger
 	private static final Logger LOG = LoggerFactory.getLogger(PortModManager.class);
+
+	// Database constant values
+    private static final String TABLE_NAME = "controller_portmodhistory";
+    private static final String PORTMOD_ID = "id";
+    private static final String DPID = "dpid";
+    private static final String PORT = "port";
+    private static final String CONFIG = "config";
+    private static final String COLUMNS[] = {PORTMOD_ID, DPID, PORT, CONFIG};
+
+    private static final long REQUEST_TIMEOUT_MSEC = 1000;
 	
 	// Module service dependencies
 	private IOFSwitchService switchService;
 	private IRestApiService restService;
-	
-	// Create list tracking downed links, should go into some sort of data storage class
-	// TODO: Should move, might have to move this to link discovery?
-	private ArrayList<Link> downLinks;
-
-	// Keep track of currently applied port modifications
-    // TODO: Need to move it to memory storage table
-    private HashMap<OFPort, ArrayList<OFPortConfig>> currentMods;
+	private IStorageSourceService storageService;
 
 	@Override
 	public Collection<Class<? extends IFloodlightService>> getModuleServices() {
@@ -69,19 +74,18 @@ public class PortModManager implements IFloodlightModule, IPortModService {
 		// Add our dependencies on the switch service and REST API
 		dependencies.add(IOFSwitchService.class);
 		dependencies.add(IRestApiService.class);
+		dependencies.add(IStorageSourceService.class);
+
         return dependencies;
 	}
 
 	@Override
 	public void init(FloodlightModuleContext context) throws FloodlightModuleException {
 
-		// Initialize the downed links storage service
-		this.downLinks = new ArrayList<Link>();
-		this.currentMods = new HashMap<OFPort, ArrayList<OFPortConfig>>();
-		
 		// Load the implementations for our module dependencies
 		this.switchService = context.getServiceImpl(IOFSwitchService.class);
 		this.restService = context.getServiceImpl(IRestApiService.class);
+		this.storageService = context.getServiceImpl(IStorageSourceService.class);
 	}
 
 	@Override
@@ -89,7 +93,11 @@ public class PortModManager implements IFloodlightModule, IPortModService {
 		
 		// Add our REST call to the REST services
 		this.restService.addRestletRoutable(new PortModWebRoutable());
-		
+
+		// Create our database table for current and old port modifications
+        this.storageService.createTable(TABLE_NAME, null);
+        this.storageService.setTablePrimaryKeyName(TABLE_NAME, PORTMOD_ID);
+
 		// Tell the world we have loaded
 		LOG.info("Loaded module: Port modifications");
 	}
@@ -117,17 +125,16 @@ public class PortModManager implements IFloodlightModule, IPortModService {
         OFPortMod portMod = sw.getOFFactory().buildPortMod().setPortNo(port)
                                                             .setConfig(Collections.singleton(config))
                                                             .setMask(Collections.singleton(config))
-                                                            .setHwAddr(sw.getPort(port)
-                                                            .getHwAddr())
+                                                            .setHwAddr(sw.getPort(port).getHwAddr())
                                                             .build();
 
-        // Check if port modification already exists on the port. If it does we can skip it, otherwise we add it
-        ArrayList<OFPortConfig> portMods = this.currentMods.get(port);
-        if (portMods != null && portMods.contains(config)) {
-            LOG.info("Port {} already contains config {}, skipping message",
-                      new Object[] {port.toString(), config.toString()});
-            return portMod;
-        }
+        // Add the port modification into the history for tracking
+        Map<String, Object> row = new HashMap<String, Object>();
+        row.put(PORTMOD_ID, "id");
+        row.put(DPID, dpid);
+        row.put(PORT, port);
+        row.put(CONFIG, config);
+        this.storageService.insertRow(TABLE_NAME, row);
 
 	    // Send the message
         if (!sw.write(portMod)) {
@@ -143,7 +150,63 @@ public class PortModManager implements IFloodlightModule, IPortModService {
     }
 
     @Override
-    public Collection<OFPortConfig> retrievePortMods(OFPort port) {
-	    return this.currentMods.get(port);
+    public Set<OFPortConfig> retrievePortMods(DatapathId dpid, OFPort port) throws PortModException {
+
+        // Check we can work with our arguments
+        if (dpid == null || port == null) {
+            String err = "Port description cannot be retrieve with uninitialized data: dpid=" + dpid + "port=" + port;
+            LOG.error(err);
+            throw new PortModException(err);
+        }
+
+        // If the switch does not have a reference we can't create the message
+        IOFSwitch sw = this.switchService.getSwitch(dpid);
+        if (sw == null) {
+            LOG.error("Could not find DPID " + dpid.toString());
+            throw new PortModException("Could not find DPID " + dpid.toString());
+        }
+
+        // TODO: This is only supported for OF >= 1.3?
+        OFPortDescStatsRequest request = sw.getOFFactory().buildPortDescStatsRequest().build();
+
+        // Send the message to the switch
+        Future<List<OFPortDescStatsReply>> response = sw.writeStatsRequest(request);
+        Set<OFPortConfig> configs = new HashSet<OFPortConfig>();
+
+        // Extract the message
+        try {
+            LOG.info("Sending port description request for port " + port.toString() + " on switch " + dpid.toString());
+            List<OFPortDescStatsReply> replies = response.get(REQUEST_TIMEOUT_MSEC, TimeUnit.MILLISECONDS);
+
+            // Add each set into our own
+            for (OFPortDescStatsReply reply : replies) {
+                for (OFPortDesc portDesc : reply.getEntries()) {
+                    // TODO: Refactor
+                    if (portDesc.getPortNo() == port) {
+                        configs.addAll(portDesc.getConfig());
+                    }
+                }
+            }
+
+        } catch (TimeoutException e) {
+            // If we timeout make a special message for it
+            String err = "Timed out waiting for response for port " + port.toString() + " on switch " + dpid.toString();
+            LOG.error(err);
+            throw new PortModException(err, e);
+
+        } catch (Exception e) {
+            // Otherwise not much we can do so just wrap and rethrow
+            String err = "Unexpected error waiting for response for port " + port.toString() + " on switch " +
+                         dpid.toString() + ": " + e.getMessage();
+
+            LOG.error(err);
+            throw new PortModException(err, e);
+        }
+
+        // Return our compiled list of configurations on the port
+        LOG.info("Found the following configs for port " + port.toString() + " on switch " + dpid.toString() + ": " +
+                 configs.toString());
+
+	    return configs;
     }
 }

@@ -59,7 +59,7 @@ public class CreatePortModResource extends ServerResource {
             portModService.createPortMod(dpid, port, OFPortConfig.valueOf(request.getConfig()));
 
         } catch (IOException | PortModException e) {
-            LOG.error(e.toString());
+            LOG.error(e.getMessage());
 
             HashMap<String, String> ret = new HashMap<String, String>();
             ret.put("status", "fail");

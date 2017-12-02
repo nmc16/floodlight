@@ -14,6 +14,8 @@ public class PortModWebRoutable implements RestletRoutable {
 		Router router = new Router(context);
 		
 		router.attach("/create/{switch}/{port}/json", CreatePortModResource.class);
+		router.attach("/retrieve/{switch}/{port}/json", RetrievePortModResource.class);
+		// TODO: router.attach("/history/{switch}/{port}/json", HistoryPortModResource.class);
 		return router;
 	}
 
