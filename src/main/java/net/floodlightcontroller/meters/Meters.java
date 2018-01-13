@@ -9,6 +9,9 @@ import java.util.Map;
 import org.projectfloodlight.openflow.protocol.OFFactories;
 import org.projectfloodlight.openflow.protocol.OFFactory;
 import org.projectfloodlight.openflow.protocol.OFFlowAdd;
+import org.projectfloodlight.openflow.protocol.OFFlowMod;
+import org.projectfloodlight.openflow.protocol.OFFlowModCommand;
+import org.projectfloodlight.openflow.protocol.OFInstructionType;
 import org.projectfloodlight.openflow.protocol.OFMatchBmap;
 import org.projectfloodlight.openflow.protocol.OFMessage;
 import org.projectfloodlight.openflow.protocol.OFMeterBandStats;
@@ -32,6 +35,7 @@ import org.projectfloodlight.openflow.protocol.meterband.OFMeterBandDrop;
 import org.projectfloodlight.openflow.protocol.oxm.OFOxms;
 import org.projectfloodlight.openflow.types.DatapathId;
 import org.projectfloodlight.openflow.types.EthType;
+import org.projectfloodlight.openflow.types.IPv4Address;
 import org.projectfloodlight.openflow.types.IPv4AddressWithMask;
 import org.projectfloodlight.openflow.types.OFPort;
 import org.projectfloodlight.openflow.types.TableId;
@@ -47,27 +51,47 @@ import net.floodlightcontroller.core.module.IFloodlightService;
 import net.floodlightcontroller.core.IFloodlightProviderService;
 import java.util.ArrayList;
 import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.TimeUnit;
 import java.util.Set;
 
 import net.floodlightcontroller.packet.ARP;
 import net.floodlightcontroller.packet.Ethernet;
 import net.floodlightcontroller.packet.IPv4;
 import net.floodlightcontroller.staticentry.IStaticEntryPusherService;
+import net.floodlightcontroller.util.OFMessageUtils;
+import net.floodlightcontroller.forwarding.Forwarding;
+
+
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 
 
+/*
+ * The Goal of this class is to initialize meters when a flow is added to a switch to attain  
+ * per flow metrics throughout our network for the purpose of perflow network monitoring.   
+ * this is done by first detecting a flow_MOD using the openflow protocol and the floodlight controler 
+ * using  the detected from a flow mod  
+ * 
+ * 
+ * 	THINGS TO THINK ABOUT
+ * 		- cannot add idle timeouts to the METER_MOD command 
+ * 		
+ */
+
+
 public class Meters implements IOFMessageListener, IFloodlightModule {
 
-	
+	private static final String OFInstructionMeterVer13 = null;
+	private static final String OFInstructionApplyActionsVer13 = null;
 	protected IFloodlightProviderService floodlightProvider;
 	protected Set<Long> Metersin;
 	protected static Logger logger;
-	protected int myflag = 0;
+	protected int myflag = 1;
 	protected int meterCounter = 1; 
 	protected IStaticEntryPusherService staticFlowEntryPusher;
+	protected int meterIdCounter = 1;
 	
 	
 	@Override
@@ -118,237 +142,91 @@ public class Meters implements IOFMessageListener, IFloodlightModule {
 
 	@Override
 	public void startUp(FloodlightModuleContext context) {
-	    floodlightProvider.addOFMessageListener(OFType.PACKET_IN, this);
-	//	floodlightProvider.addOFMessageListener(OFType.TABLE_MOD, this);
-		//floodlightProvider.addOFMessageListener(OFType.FLOW_MOD, this);
-		
+		floodlightProvider.addOFMessageListener(OFType.FLOW_MOD, this);
 		
 	}
 
 	@Override
-	   public net.floodlightcontroller.core.IListener.Command receive(IOFSwitch sw, OFMessage msg, FloodlightContext cntx) {
+	public net.floodlightcontroller.core.IListener.Command receive(IOFSwitch sw, OFMessage msg, FloodlightContext cntx) {
 			
-			switch(msg.getType()) {
-			
-			/*case TABLE_MOD: 
-				logger.info("TABLE MOD******************************" + msg.toString()) ;
-				*/
+		switch(msg.getType()) {
+
+			/*
+			 * We look at the FLOW_MOD instead of flow add for 2 reasons 
+			 * 	1.  We can make use of the complex matching that is already done by the controller
+			 *  2.  the FLOW_MOD sent by the controller already contains a summary of all the 
+			 *   	information from the flow that is needed for creating the meter
+			 */
 		
-			case FLOW_MOD:
-
+			case FLOW_MOD: 	
+				// pull all the variables needed out of the flow mod 
+				OFFlowMod pi = (OFFlowMod) msg; 
+				Match testM = pi.getMatch();
+				List<OFInstruction> inst = pi.getInstructions();			
+				OFFlowModCommand type = pi.getCommand();
+				TableId table = pi.getTableId();
+				boolean corAdd = false; 
+				logger.info("THe inputs :" + pi.toString());
 				
-				logger.info("FLOW MOD" )  ;
-				//Ethernet ethr = IFloodlightProviderService.bcStore.get(cntx, IFloodlightProviderService.CONTEXT_PI_PAYLOAD);
+				if(type == OFFlowModCommand.ADD) {
+					EthType ethtype = testM.get(MatchField.ETH_TYPE);
+					EthType ethtest = EthType.of(0x800);						
+					
+					// Need to make sure it is an action add not a meter add
+					if(inst.get(0) != null) {
+						OFInstruction testinst = inst.get(0);
+						OFInstructionType curtype = testinst.getType();	
+						OFInstructionType testval = OFInstructionType.valueOf("APPLY_ACTIONS");
+						if(curtype.equals(testval)) {
+							corAdd = true; 
+						}
+					}
+					
+					// check that the Ethernet type add type are correct before trying to add the meter 
+					
+					if(ethtype == ethtest && corAdd && myflag == 1) {	
+						pi.getTableId();
+						try { 
+							addMeter(testM,meterIdCounter,sw,inst, table);
+						} catch (InterruptedException e) {
+							logger.info("We had a problem :" + pi.toString());
+							e.printStackTrace();
+						}
+						meterIdCounter ++;
+					}
 				
-				
-				if(myflag ==0) {
-					logger.info("Were going to try and get a meter going for our switch table 0x0" )  ;
-					myflag =1 ;
-					OFFactory meterFactory = OFFactories.getFactory(OFVersion.OF_13);
-					OFMeterMod.Builder meterModBuilder = meterFactory.buildMeterMod().setMeterId(1).setCommand(OFMeterModCommand.ADD);
-					OFMeterBand.Builder meterband = meterFactory.meterBands().buildExperimenter();
-					OFMeterBand band = meterband.build();
-					List<OFMeterBand> bands = new ArrayList<OFMeterBand>();
-		            bands.add(band);
-		            Set<OFMeterFlags> mflags = new HashSet<OFMeterFlags>();
-		            mflags.add(OFMeterFlags.KBPS) ;
-					meterModBuilder.setMeters(bands).setFlags(mflags).build();
-					sw.write(meterModBuilder.build());
-					
-					// now try to add the flow to the meter 
-					
-					
-					List<OFInstruction> instructions = new ArrayList<OFInstruction>();
-					OFInstructionMeter meter = meterFactory.instructions().buildMeter().setMeterId(1).build();
-					
-					//OFInstructionApplyActions output = meterFactory.actions().buildOutput().setPort(OFPort.of(2)).setMaxLen(0xffFFffFF).build();
-
-					instructions.add(meter);
-					//instructions.add(Collections.singletonList((OFAction) output));
-	
-					//instructions.add(meter);
-					OFFlowAdd flowAdd = meterFactory.buildFlowAdd().setInstructions(instructions).build();
-					myflag ++; 
-					
-					
-					
-					// at this point we have added the meter now we  need to assign somthing to it 
-					
-					
-					List<OFInstruction> flowinstructions = new ArrayList<OFInstruction>();
-					
-					
-					OFInstructionMeter metertouse = meterFactory.instructions().buildMeter().setMeterId(1).build();
-					//meterFactory.instructions().bui
-					
-					
-					
-					
-					
-					flowinstructions.add(metertouse);
-					
-					/* Flow will send matched packets to meter ID 1 and then possibly output on port 2 */
-					OFFlowAdd flowAdd2 = meterFactory.buildFlowAdd()
-					    /* set anything else you need, e.g. match */
-					    .setInstructions(flowinstructions)
-					    .build();
-					
-					
 				}
-				
-				
-				
-		case PACKET_IN:		
-				
-				OFFactory myFactory = OFFactories.getFactory(OFVersion.OF_13);
-						
-				
-				if(myflag ==0) {
-					// add a meter 
-					logger.info("Were going to try and get a meter going for our switch table 0x0" )  ;
-					myflag =1 ;
-					OFFactory meterFactory = OFFactories.getFactory(OFVersion.OF_13);
-					OFMeterMod.Builder meterModBuilder = meterFactory.buildMeterMod().setMeterId(1).setCommand(OFMeterModCommand.ADD);
-					OFMeterBand.Builder meterband = meterFactory.meterBands().buildExperimenter();
-					OFMeterBand band = meterband.build();
-					List<OFMeterBand> bands = new ArrayList<OFMeterBand>();
-		            bands.add(band);
-		            Set<OFMeterFlags> mflags = new HashSet<OFMeterFlags>();
-		            mflags.add(OFMeterFlags.KBPS) ;
-					meterModBuilder.setMeters(bands).setFlags(mflags).build();
-					sw.write(meterModBuilder.build());
-					// add a flow to said meter;
-					OFInstructions instructions = myFactory.instructions();
-					ArrayList<OFAction> actionList = new ArrayList<OFAction>();
-					OFActions actions = myFactory.actions();
-					OFOxms oxms = myFactory.oxms();
-					List<OFInstruction> flowinstructions2 = new ArrayList<OFInstruction>();
-					Match mymatch = myFactory.buildMatch().setMasked(MatchField.IPV4_SRC, IPv4AddressWithMask.of("10.0.0.1")).setMasked(MatchField.IPV4_DST, IPv4AddressWithMask.of("10.0.0.2")).build() ;
-					OFInstructionMeter metertouse = myFactory.instructions().buildMeter().setMeterId(1).build();
-					OFActionOutput output = meterFactory.actions().buildOutput().setPort(OFPort.of(2)).setMaxLen(0xffFFffFF).build();
-					actionList.add(output);
-					OFInstructionApplyActions applyActions = myFactory.instructions().buildApplyActions().setActions(actionList).build();
-					flowinstructions2.add(metertouse);
-					flowinstructions2.add(applyActions);
-						
-					OFFlowAdd flowAdd = myFactory.buildFlowAdd().setInstructions(flowinstructions2).setTableId(TableId.of(0)).build();
-					sw.write(flowAdd);
-			
-				}
-				
-				
-				
-				
-				
-			/*case PACKET_IN:
-				
-				//logger.info("Packet in" ) ;
-				// if this is our first try lets give it a shot
-				
-				logger.info("Trying to disect the packet" )  ;
-				//Ethernet eth = IFloodlightProviderService.bcStore.get(cntx, IFloodlightProviderService.CONTEXT_PI_PAYLOAD);
-				
-				
-				logger.info("Here are the entris on the switch" )  ;
-				System.out.println(staticFlowEntryPusher.getEntries(sw.getId()));
-				
-				
-				
-				if(myflag ==0) {
-					
-					logger.info("Were going to try and get a meter going for our switch table 0x0" )  ;
-					myflag =1 ;
-					OFFactory meterFactory = OFFactories.getFactory(OFVersion.OF_13);
-					OFMeterMod.Builder meterModBuilder = meterFactory.buildMeterMod().setMeterId(1).setCommand(OFMeterModCommand.ADD);
-					OFMeterBand.Builder meterband = meterFactory.meterBands().buildExperimenter();
-					OFMeterBand band = meterband.build();
-					List<OFMeterBand> bands = new ArrayList<OFMeterBand>();
-		            bands.add(band);
-		            Set<OFMeterFlags> mflags = new HashSet<OFMeterFlags>();
-		            mflags.add(OFMeterFlags.KBPS) ;
-					meterModBuilder.setMeters(bands).setFlags(mflags).build();
-					sw.write(meterModBuilder.build());
-					
-					// now try to add the flow to the meter 
-					
-					
-					List<OFInstruction> instructions = new ArrayList<OFInstruction>();
-					OFInstructionMeter meter = meterFactory.instructions().buildMeter().setMeterId(1).build();
-					
-					//OFInstructionApplyActions output = meterFactory.actions().buildOutput().setPort(OFPort.of(2)).setMaxLen(0xffFFffFF).build();
 
-					instructions.add(meter);
-					//instructions.add(Collections.singletonList((OFAction) output));
-	
-					//instructions.add(meter);
-					OFFlowAdd flowAdd = meterFactory.buildFlowAdd().setInstructions(instructions).build();
-					myflag ++; 
-					
-				
-					
-					
-					
-					// at this point we have added the meter now we  need to assign somthing to it 
-					
-					
-					List<OFInstruction> flowinstructions = new ArrayList<OFInstruction>();
-					
-					
-					OFInstructionMeter metertouse = meterFactory.instructions().buildMeter().setMeterId(1).build();
-					//meterFactory.instructions().bui
-				//OFInstructionApplyActions output = meterFactory.actions().buildOutput().setPort(OFPort.of(2)).setMaxLen(0xffFFffFF).build();
-					
-					
-					
-					
-					flowinstructions.add(metertouse);
-					
-					 Flow will send matched packets to meter ID 1 and then possibly output on port 2 
-					OFFlowAdd flowAdd2 = meterFactory.buildFlowAdd()
-					     set anything else you need, e.g. match 
-					    .setInstructions(flowinstructions)
-					    .build();
-
-					
-				}
-				// OFPacketIn pi = (OFPacketIn) msg;
-				// OFMatchBmap match = new OFMatchBmap();
-				
-
-					//logger.info("Here is the payload of the packet in : ");
-					//System.out.println("The eth is " + eth.getEtherType() );
-					
-				//	 if (eth.getEtherType() == EthType.IPv4) {
-			//	             We got an IPv4 packet; get the payload from Ethernet 
-				   //        IPv4 ipv4 = (IPv4) eth.getPayload();
-				    //        logger.info("IPV444444444 source: "+ ipv4.getDestinationAddress() + " The Dest is: "+ ipv4.getDestinationAddress());
-				             
-				            
-				            
-				           //  More to come here 
-				    // } else if (eth.getEtherType() == EthType.ARP) {
-				         //    We got an ARP packet; get the payload from Ethernet 
-				    //        ARP arp = (ARP) eth.getPayload();
-				           // logger.info("ARRRRRP");
-				       //  More to come here 
-				  
-				    // } else {
-			
-		//		     }
-					 
-					
-					
-					*/
-					
-	
-			
-			}
-	        return Command.CONTINUE;
-	        
-	    }
+		}
+        return Command.CONTINUE;
+        
+    }
 	
 	
-	
-
-
+	/*
+	 * This function created to clean up the meter add process 
+	 * takes in the information pulled from the flow mod and 
+	 * creates a meter to monitor that flow 
+	 */
+	public void addMeter(Match match, long meterID, IOFSwitch sw, List<OFInstruction> instr, TableId table) throws InterruptedException {
+		// need a list to hold all the built commands 
+		List<OFMeterBand> bands = new ArrayList<OFMeterBand>();
+		// First build the meter  
+		OFFactory meterFactory = OFFactories.getFactory(OFVersion.OF_13); 
+		OFMeterMod.Builder meterModBuilder = meterFactory.buildMeterMod().setMeterId(meterID).setCommand(OFMeterModCommand.ADD);		
+		OFMeterBand.Builder meterband = meterFactory.meterBands().buildExperimenter();
+		OFMeterBand band = meterband.build();
+        bands.add(band);
+        Set<OFMeterFlags> mflags = new HashSet<OFMeterFlags>();
+        mflags.add(OFMeterFlags.KBPS) ;
+		meterModBuilder.setMeters(bands).setFlags(mflags).build();
+		sw.write(meterModBuilder.build());
+		//add the flow to the meter 
+		List<OFInstruction> flowinstructions2 = new ArrayList<OFInstruction>();
+		OFInstructionMeter metertouse = meterFactory.instructions().buildMeter().setMeterId(meterID).build();		
+		flowinstructions2.add(metertouse);
+		flowinstructions2.addAll(instr);	
+		OFFlowAdd flowAdd = meterFactory.buildFlowAdd().setInstructions(flowinstructions2).setMatch(match).setTableId(table).setPriority(1).build();
+		sw.write(flowAdd);
+	}
 }
