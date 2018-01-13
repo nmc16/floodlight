@@ -16,6 +16,7 @@ import org.projectfloodlight.openflow.protocol.*;
 import org.projectfloodlight.openflow.protocol.match.Match;
 import org.projectfloodlight.openflow.protocol.ver13.OFMeterSerializerVer13;
 import org.projectfloodlight.openflow.types.DatapathId;
+import org.projectfloodlight.openflow.types.OFGroup;
 import org.projectfloodlight.openflow.types.OFPort;
 import org.projectfloodlight.openflow.types.TableId;
 import org.projectfloodlight.openflow.types.U64;
@@ -37,8 +38,9 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 
 	private static boolean isEnabled = false;
 	
-	private static int portStatsInterval = 10; /* could be set by REST API, so not final */
+	private static int portStatsInterval = 1; /* could be set by REST API, so not final */
 	private static ScheduledFuture<?> portStatsCollector;
+	private static ScheduledFuture<?> flowStatsCollector;
 
 	private static final long BITS_PER_BYTE = 8;
 	private static final long MILLIS_PER_SEC = 1000;
@@ -47,6 +49,9 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 	private static final String ENABLED_STR = "enable";
 
 	private static final HashMap<NodePortTuple, SwitchPortBandwidth> portStats = new HashMap<NodePortTuple, SwitchPortBandwidth>();
+	private static final HashMap<Match, SwitchPortBandwidth> flowStats = new HashMap<Match, SwitchPortBandwidth>();
+	
+	
 	private static final HashMap<NodePortTuple, SwitchPortBandwidth> tentativePortStats = new HashMap<NodePortTuple, SwitchPortBandwidth>();
 
 	/**
@@ -162,6 +167,52 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 		}
 
 	}
+	
+	
+	/*
+	 * Added by Charlie Hardwick-Kelly Carleton University 
+	 * The goal with this class is to either pick out flow statistics or get the
+	 * meter statistics again 
+	 */
+	protected class FlowStatsCollector implements Runnable {
+
+		@Override
+		public void run() {
+			Map<DatapathId, List<OFStatsReply>> replies = getSwitchStatistics(switchService.getAllSwitchDpids(), OFStatsType.FLOW);
+			for (Entry<DatapathId, List<OFStatsReply>> e : replies.entrySet()) {
+				for (OFStatsReply r : e.getValue()) {
+			//		OFFlowLightweightStatsReply fsr = (OFFlowLightweightStatsReply) r;
+					//OFFlowStatsReply fsr = (OFFlowStatsReply) r; 
+					//OFAggregateStatsReply asr = (OFAggregateStatsReply) r; 
+					//System.out.println("The Aggragate Stats Reply is: " + asr);
+					//System.out.println("The Meter Stats Reply is class: " + msr);
+					//System.out.println("The FLow Stats Reply is: " + fsr);
+					
+					OFFlowStatsReply fsr = (OFFlowStatsReply) r; 
+					//System.out.println("The stat is: " + fsr);	
+					for ( OFFlowStatsEntry fse : fsr.getEntries()) {
+						
+						System.out.println("The stat is: " + fse);	
+						
+					}
+					
+					
+					//OFMeterStatsReply msr = (OFMeterStatsReply) r;
+					//for ( OFMeterStats mse : msr.getEntries()) {
+					//	System.out.println("The stat is: " + mse);	
+					//}
+
+				}	
+			}
+		}
+		
+		
+		
+	}
+	
+	
+	
+	
 
 	/**
 	 * Single thread for collecting switch statistics and
@@ -296,7 +347,8 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 	 * Start all stats threads.
 	 */
 	private void startStatisticsCollection() {
-		portStatsCollector = threadPoolService.getScheduledExecutor().scheduleAtFixedRate(new PortStatsCollector(), portStatsInterval, portStatsInterval, TimeUnit.SECONDS);
+		//portStatsCollector = threadPoolService.getScheduledExecutor().scheduleAtFixedRate(new PortStatsCollector(), portStatsInterval, portStatsInterval, TimeUnit.SECONDS);
+		flowStatsCollector = threadPoolService.getScheduledExecutor().scheduleAtFixedRate(new FlowStatsCollector(), portStatsInterval, portStatsInterval, TimeUnit.SECONDS);
 		tentativePortStats.clear(); /* must clear out, otherwise might have huge BW result if present and wait a long time before re-enabling stats */
 		log.warn("Statistics collection thread(s) started");
 	}
@@ -387,8 +439,28 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 						.setMatch(match)
 						.setOutPort(OFPort.ANY)
 						.setTableId(TableId.ALL)
+						.setOutGroup(OFGroup.ANY)
 						.build();
 				break;
+				
+			case FLOW_LIGHTWEIGHT:
+				
+				match = sw.getOFFactory().buildMatch().build();
+				req =  sw.getOFFactory().buildFlowLightweightStatsRequest()
+						.setMatch(match)
+						.setOutPort(OFPort.ANY) 
+						.setTableId(TableId.ALL)
+						.build();
+				break; 
+				
+			case FLOW_MONITOR:
+				
+				match = sw.getOFFactory().buildMatch().build();
+				req = sw.getOFFactory().buildFlowMonitorRequest().build();
+				
+				
+				break;
+				
 			case AGGREGATE:
 				match = sw.getOFFactory().buildMatch().build();
 				req = sw.getOFFactory().buildAggregateStatsRequest()

@@ -92,6 +92,7 @@ public class Meters implements IOFMessageListener, IFloodlightModule {
 	protected int meterCounter = 1; 
 	protected IStaticEntryPusherService staticFlowEntryPusher;
 	protected int meterIdCounter = 1;
+	protected int factoryFlag =0; 
 	
 	
 	@Override
@@ -166,7 +167,7 @@ public class Meters implements IOFMessageListener, IFloodlightModule {
 				OFFlowModCommand type = pi.getCommand();
 				TableId table = pi.getTableId();
 				boolean corAdd = false; 
-				logger.info("THe inputs :" + pi.toString());
+				//logger.info("THe inputs :" + pi.toString());
 				
 				if(type == OFFlowModCommand.ADD) {
 					EthType ethtype = testM.get(MatchField.ETH_TYPE);
@@ -182,21 +183,26 @@ public class Meters implements IOFMessageListener, IFloodlightModule {
 						}
 					}
 					
-					// check that the Ethernet type add type are correct before trying to add the meter 
+					// need to check that the switch has the right factory 
+					if (sw.getOFFactory().getVersion().compareTo(OFVersion.OF_13) >= 0) {
+						factoryFlag =1;
+					}
 					
-					if(ethtype == ethtest && corAdd && myflag == 1) {	
+					
+					// check that the Ethernet type add type are correct before trying to add the meter 					
+					if(ethtype == ethtest && corAdd && myflag == 1 && factoryFlag ==1) {	
 						pi.getTableId();
 						try { 
 							addMeter(testM,meterIdCounter,sw,inst, table);
 						} catch (InterruptedException e) {
-							logger.info("We had a problem :" + pi.toString());
+							//logger.info("We had a problem :" + pi.toString());
 							e.printStackTrace();
 						}
 						meterIdCounter ++;
 					}
 				
 				}
-
+			break;
 		}
         return Command.CONTINUE;
         
