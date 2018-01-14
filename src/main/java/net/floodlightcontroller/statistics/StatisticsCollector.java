@@ -8,6 +8,7 @@ import net.floodlightcontroller.core.module.FloodlightModuleContext;
 import net.floodlightcontroller.core.module.FloodlightModuleException;
 import net.floodlightcontroller.core.module.IFloodlightModule;
 import net.floodlightcontroller.core.module.IFloodlightService;
+import net.floodlightcontroller.core.types.NodeMeterTuple;
 import net.floodlightcontroller.core.types.NodePortTuple;
 import net.floodlightcontroller.restserver.IRestApiService;
 import net.floodlightcontroller.statistics.web.SwitchStatisticsWebRoutable;
@@ -49,7 +50,7 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 	private static final String ENABLED_STR = "enable";
 
 	private static final HashMap<NodePortTuple, SwitchPortBandwidth> portStats = new HashMap<NodePortTuple, SwitchPortBandwidth>();
-	private static final HashMap<Match, SwitchPortBandwidth> flowStats = new HashMap<Match, SwitchPortBandwidth>();
+	private static final HashMap<NodeMeterTuple, FlowBandwidth> meterStats = new HashMap<NodeMeterTuple, FlowBandwidth>();
 	
 	
 	private static final HashMap<NodePortTuple, SwitchPortBandwidth> tentativePortStats = new HashMap<NodePortTuple, SwitchPortBandwidth>();
@@ -178,29 +179,27 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 
 		@Override
 		public void run() {
-			Map<DatapathId, List<OFStatsReply>> replies = getSwitchStatistics(switchService.getAllSwitchDpids(), OFStatsType.FLOW);
+			Map<DatapathId, List<OFStatsReply>> replies = getSwitchStatistics(switchService.getAllSwitchDpids(), OFStatsType.METER);
 			for (Entry<DatapathId, List<OFStatsReply>> e : replies.entrySet()) {
 				for (OFStatsReply r : e.getValue()) {
 			//		OFFlowLightweightStatsReply fsr = (OFFlowLightweightStatsReply) r;
 					//OFFlowStatsReply fsr = (OFFlowStatsReply) r; 
-					//OFAggregateStatsReply asr = (OFAggregateStatsReply) r; 
-					//System.out.println("The Aggragate Stats Reply is: " + asr);
+					System.out.println("The switch is: " + e.getKey());	
 					//System.out.println("The Meter Stats Reply is class: " + msr);
 					//System.out.println("The FLow Stats Reply is: " + fsr);
-					
-					OFFlowStatsReply fsr = (OFFlowStatsReply) r; 
 					//System.out.println("The stat is: " + fsr);	
-					for ( OFFlowStatsEntry fse : fsr.getEntries()) {
+					
+					//for ( OFFlowStatsEntry fse : fsr.getEntries()) {
 						
-						System.out.println("The stat is: " + fse);	
+					//	System.out.println("The stat is: " + fse);	
+						
+					//}
+						
+					OFMeterStatsReply msr = (OFMeterStatsReply) r;
+					for ( OFMeterStats mse : msr.getEntries()) {
+						System.out.println("The stat is: " + mse);	
 						
 					}
-					
-					
-					//OFMeterStatsReply msr = (OFMeterStatsReply) r;
-					//for ( OFMeterStats mse : msr.getEntries()) {
-					//	System.out.println("The stat is: " + mse);	
-					//}
 
 				}	
 			}
