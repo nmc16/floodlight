@@ -50,8 +50,8 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 	private static final String ENABLED_STR = "enable";
 
 	private static final HashMap<NodePortTuple, SwitchPortBandwidth> portStats = new HashMap<NodePortTuple, SwitchPortBandwidth>();
-	private static final HashMap<NodeMeterTuple, FlowBandwidth> meterStats = new HashMap<NodeMeterTuple, FlowBandwidth>();
-	
+	private static final HashMap<NodeMeterTuple, MeterBandwidth> meterStats = new HashMap<NodeMeterTuple, MeterBandwidth>();
+	private static final HashMap<NodeMeterTuple, MeterBandwidth> tentativemeterStats = new HashMap<NodeMeterTuple, MeterBandwidth>();
 	
 	private static final HashMap<NodePortTuple, SwitchPortBandwidth> tentativePortStats = new HashMap<NodePortTuple, SwitchPortBandwidth>();
 
@@ -179,39 +179,70 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 
 		@Override
 		public void run() {
-			Map<DatapathId, List<OFStatsReply>> replies = getSwitchStatistics(switchService.getAllSwitchDpids(), OFStatsType.METER);
-			for (Entry<DatapathId, List<OFStatsReply>> e : replies.entrySet()) {
+			Map<DatapathId, List<OFStatsReply>> meterReplies = getSwitchStatistics(switchService.getAllSwitchDpids(), OFStatsType.METER);
+			Map<DatapathId, List<OFStatsReply>> flowReplies = getSwitchStatistics(switchService.getAllSwitchDpids(), OFStatsType.FLOW);
+			for (Entry<DatapathId, List<OFStatsReply>> e : meterReplies.entrySet()) {
 				for (OFStatsReply r : e.getValue()) {
-			//		OFFlowLightweightStatsReply fsr = (OFFlowLightweightStatsReply) r;
-					//OFFlowStatsReply fsr = (OFFlowStatsReply) r; 
-					System.out.println("The switch is: " + e.getKey());	
+					DatapathId sw = e.getKey(); 
+					// at this point I have the meter stats I need to compare them and 
+					OFMeterStatsReply msr = (OFMeterStatsReply) r;
+					for ( OFMeterStats mse : msr.getEntries()) {
+						//System.out.println("The stat is: " + mse);	
+						long meterId = mse.getMeterId(); 
+						U64 bytesIn = mse.getByteInCount(); //take in the number of bytes  
+						long dur = mse.getDurationSec(); //take in the duration 
+						// now I need to set up the comparisons 
+						NodeMeterTuple nmt = new NodeMeterTuple(sw,meterId) ;
+						
+						if(meterStats.containsKey(nmt)) {
+							MeterBandwidth stat = meterStats.get(nmt);
+							System.out.println("The stat looks like sw : "+ stat.getSwitchId() + " bytesIn: " +  stat.getBytesIn() + " Duration " + stat.getUpdateTime() + " speed " + stat.getFlowSpeedBitsPerSec());
+							
+							// now we need to update the stats 
+							
+							// first calculate the bandwidth in bps
+							
+							
+							// diff in bytes 
+							U64 byteDiff = bytesIn.subtract(stat.getBytesIn());
+							//The diff in time
+							long timediff = dur - stat.getUpdateTime();
+							
+							//Update the existing  stat info in the hash 
+							meterStats.put(nmt, MeterBandwidth.of(sw, meterId, dur, bytesIn, U64.ofRaw((byteDiff.getValue() * BITS_PER_BYTE) / timediff) )); 
+	
+							
+						}else {
+							//if there is no existing stat add one in with the new info
+							meterStats.put(nmt, MeterBandwidth.of(sw, meterId, dur, bytesIn, U64.ZERO)); 				
+						}
+					}
+				}	
+			}
+			/*	
+			for (Entry<DatapathId, List<OFStatsReply>> e : flowReplies.entrySet()) {
+				for (OFStatsReply r : e.getValue()) {
+					//System.out.println("The switch is: " + e.getKey());	
 					//System.out.println("The Meter Stats Reply is class: " + msr);
 					//System.out.println("The FLow Stats Reply is: " + fsr);
 					//System.out.println("The stat is: " + fsr);	
-					
-					//for ( OFFlowStatsEntry fse : fsr.getEntries()) {
+					OFFlowStatsReply fsr = (OFFlowStatsReply) r; 
+					for ( OFFlowStatsEntry fse : fsr.getEntries()) {
 						
-					//	System.out.println("The stat is: " + fse);	
-						
-					//}
-						
-					OFMeterStatsReply msr = (OFMeterStatsReply) r;
-					for ( OFMeterStats mse : msr.getEntries()) {
-						System.out.println("The stat is: " + mse);	
+						System.out.println("The stat is: " + fse);	
 						
 					}
-
+					//OFMeterStatsReply msr = (OFMeterStatsReply) r;
+					//for ( OFMeterStats mse : msr.getEntries()) {
+					//	System.out.println("The stat is: " + mse);	
+						
+					//}
+	
 				}	
-			}
+			}	
+			*/
 		}
-		
-		
-		
 	}
-	
-	
-	
-	
 
 	/**
 	 * Single thread for collecting switch statistics and

@@ -19,7 +19,7 @@ import org.projectfloodlight.openflow.types.DatapathId;
 @JsonSerialize(using=NodeMeterTupleSerializer.class)
 public class NodeMeterTuple implements Comparable<NodeMeterTuple> {
     private DatapathId nodeId; // switch DPID
-    private long metertId; // switch port id
+    private long metertId; // switch meter id
 
     /**
      * Creates a NodeMeterTuple
@@ -48,7 +48,7 @@ public class NodeMeterTuple implements Comparable<NodeMeterTuple> {
     }
     
     public String toString() {
-        return "[id=" + nodeId.toString() + ", port=" + metertId + "]";
+        return "[id=" + nodeId.toString() + ", meterId=" + metertId + "]";
     }
 
     @Override

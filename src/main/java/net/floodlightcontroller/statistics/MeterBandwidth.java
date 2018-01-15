@@ -1,102 +1,76 @@
 package net.floodlightcontroller.statistics;
 
-import java.util.Date;
-
-import org.projectfloodlight.openflow.protocol.match.Match;
 import org.projectfloodlight.openflow.types.DatapathId;
 import org.projectfloodlight.openflow.types.U64;
-
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
-
 import net.floodlightcontroller.statistics.web.SwitchMeterBandwidthSerializer;
 
 
 @JsonSerialize(using=SwitchMeterBandwidthSerializer.class)
 public class MeterBandwidth {
 	private DatapathId id;
-	private Match match; 
+	private long meterId; 
+	private long duration;
+	private U64 bytesIn;  
 	private U64 speed;
-	private U64 rx;
-	private U64 tx;
-	private Date time;
-	private U64 rxValue;
-	private U64 txValue;
+	
 	
 	private MeterBandwidth() {}
-	private MeterBandwidth(DatapathId d, Match m, U64 s, U64 rx, U64 tx, U64 rxValue, U64 txValue) {
+	private MeterBandwidth(DatapathId d, long m, long t, U64 b, U64 s) {
 		id = d;
-		match = m;
+		meterId = m;
+		duration = t; 
+		bytesIn = b;
 		speed = s;
-		this.rx = rx;
-		this.tx = tx;
-		time = new Date();
-		this.rxValue = rxValue;
-		this.txValue = txValue;
 	}
 	
-	public static MeterBandwidth of(DatapathId d,Match m, U64 s, U64 rx, U64 tx, U64 rxValue, U64 txValue) {
+	public static MeterBandwidth of(DatapathId d, long m, long t, U64 b, U64 s) {
 		if (d == null) {
 			throw new IllegalArgumentException("Datapath ID cannot be null");
 		}
-		if (m == null) {
-			throw new IllegalArgumentException("Match cannot be null");
+		if (m < 0) {
+			throw new IllegalArgumentException("MeterID cannot be less than 0");
 		}
+		if (t < 0) {
+			throw new IllegalArgumentException("time cannot be less than 0");
+		}
+
+		if (b == null) {
+			throw new IllegalArgumentException("Bytes in cannot be null");
+		}
+
 		if (s == null) {
 			throw new IllegalArgumentException("Link speed cannot be null");
 		}
-		if (rx == null) {
-			throw new IllegalArgumentException("RX bandwidth cannot be null");
-		}
-		if (tx == null) {
-			throw new IllegalArgumentException("TX bandwidth cannot be null");
-		}
-		if (rxValue == null) {
-			throw new IllegalArgumentException("RX value cannot be null");
-		}
-		if (txValue == null) {
-			throw new IllegalArgumentException("TX value cannot be null");
-		}
-		return new MeterBandwidth(d,m, s, rx, tx, rxValue, txValue);
+		
+		return new MeterBandwidth(d ,m ,t ,b , s);
 	}
 	
 	public DatapathId getSwitchId() {
 		return id;
 	}
 	
-	public Match getMatch() {
-		return match;
+	public long getMeterId() {
+		return meterId;
+	}
+	public long getUpdateTime() {
+		return duration;
 	}
 	
-	public U64 getLinkSpeedBitsPerSec() {
+	public U64 getBytesIn() {
+		return bytesIn; 
+		
+	}
+	public U64 getFlowSpeedBitsPerSec() {
 		return speed;
 	}
 	
-	public U64 getBitsPerSecondRx() {
-		return rx;
-	}
-	
-	public U64 getBitsPerSecondTx() {
-		return tx;
-	}
-	
-	protected U64 getPriorByteValueRx() {
-		return rxValue;
-	}
-	
-	protected U64 getPriorByteValueTx() {
-		return txValue;
-	}
-	
-	public long getUpdateTime() {
-		return time.getTime();
-	}
-		
 	@Override
 	public int hashCode() {
 		final int prime = 31;
 		int result = 1;
 		result = prime * result + ((id == null) ? 0 : id.hashCode());
-		result = prime * result + ((match == null) ? 0 : match.hashCode());
+		result = (int) (prime * result + meterId);
 		return result;
 	}
 	@Override
@@ -113,10 +87,10 @@ public class MeterBandwidth {
 				return false;
 		} else if (!id.equals(other.id))
 			return false;
-		if (match == null) {
-			if (other.match != null)
+		if (meterId == 0) {
+			if (other.meterId != 0)
 				return false;
-		} else if (!match.equals(other.match))
+		} else if (!(meterId == other.meterId))
 			return false;
 		return true;
 	}
