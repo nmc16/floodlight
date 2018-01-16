@@ -13,7 +13,7 @@ import net.floodlightcontroller.core.module.IFloodlightModule;
 import net.floodlightcontroller.core.module.IFloodlightService;
 import net.floodlightcontroller.portmod.web.PortModWebRoutable;
 import net.floodlightcontroller.restserver.IRestApiService;
-import net.floodlightcontroller.storage.IStorageSourceService;
+import net.floodlightcontroller.storage.*;
 
 import org.projectfloodlight.openflow.protocol.*;
 import org.projectfloodlight.openflow.types.DatapathId;
@@ -23,6 +23,9 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Module provides ability to create and send port modifications to ports on switches.
+ *
+ * TODO: Seems like it only can work for version 1.3 or greater, need to investigate
+ * TODO: Seems like some don't work with each other, i.e. NO_RECV and NO_FLOOD...
  *
  * @author nicolas.mccallum@carleton.ca
  */
@@ -36,8 +39,9 @@ public class PortModManager implements IFloodlightModule, IPortModService {
     private static final String PORTMOD_ID = "id";
     private static final String DPID = "dpid";
     private static final String PORT = "port";
-    private static final String CONFIG = "config";
-    private static final String COLUMNS[] = {PORTMOD_ID, DPID, PORT, CONFIG};
+    private static final String PORTMOD = "portmod";
+    private static final String TIME = "time";
+    private static final String COLUMNS[] = {PORTMOD_ID, DPID, PORT, PORTMOD, TIME};
 
     private static final long REQUEST_TIMEOUT_MSEC = 1000;
 	
@@ -48,7 +52,7 @@ public class PortModManager implements IFloodlightModule, IPortModService {
 
 	@Override
 	public Collection<Class<? extends IFloodlightService>> getModuleServices() {
-		Collection<Class<? extends IFloodlightService>> services = new ArrayList<Class<? extends IFloodlightService>>();
+		Collection<Class<? extends IFloodlightService>> services = new ArrayList<>();
 
 		// Add ourselves as a service we provide
         services.add(IPortModService.class);
@@ -57,8 +61,7 @@ public class PortModManager implements IFloodlightModule, IPortModService {
 
 	@Override
 	public Map<Class<? extends IFloodlightService>, IFloodlightService> getServiceImpls() {
-		Map<Class<? extends IFloodlightService>, IFloodlightService> impls =
-                new HashMap<Class<? extends IFloodlightService>, IFloodlightService>();
+		Map<Class<? extends IFloodlightService>, IFloodlightService> impls = new HashMap<>();
 
 		// Add ourselves as our own implementation
         impls.put(IPortModService.class, this);
@@ -69,7 +72,7 @@ public class PortModManager implements IFloodlightModule, IPortModService {
 	public Collection<Class<? extends IFloodlightService>> getModuleDependencies() {
 
 	    // Create list for the dependencies
-		Collection<Class<? extends IFloodlightService>> dependencies = new ArrayList<Class<? extends IFloodlightService>>();
+		Collection<Class<? extends IFloodlightService>> dependencies = new ArrayList<>();
 
 		// Add our dependencies on the switch service and REST API
 		dependencies.add(IOFSwitchService.class);
@@ -102,13 +105,24 @@ public class PortModManager implements IFloodlightModule, IPortModService {
 		LOG.info("Loaded module: Port modifications");
 	}
 
+	@Override
+    public OFPortMod createPortMod(DatapathId dpid, OFPort port, OFPortConfig config, boolean enable)
+            throws PortModException {
+
+	    Map<OFPortConfig, Boolean> configs = new HashMap<>();
+	    configs.put(config, enable);
+
+	    return createPortMod(dpid, port, configs);
+    }
+
     @Override
-    public OFPortMod createPortMod(DatapathId dpid, OFPort port, OFPortConfig config) throws PortModException {
+    public OFPortMod createPortMod(DatapathId dpid, OFPort port, Map<OFPortConfig, Boolean> configs)
+            throws PortModException {
 
 	    // Check we can work with our arguments
-        if (dpid == null || port == null || config == null) {
+        if (dpid == null || port == null || configs == null) {
             String err = "Port modification cannot be created with uninitialized data: dpid=" + dpid + "port=" + port +
-                         "config=" + config;
+                         "config=" + configs;
 
             LOG.error(err);
             throw new PortModException(err);
@@ -123,27 +137,28 @@ public class PortModManager implements IFloodlightModule, IPortModService {
 
         // Create the port modification message
         OFPortMod portMod = sw.getOFFactory().buildPortMod().setPortNo(port)
-                                                            .setConfig(Collections.singleton(config))
-                                                            .setMask(Collections.singleton(config))
+                                                            .setConfig(getEnabledConfigs(configs))
+                                                            .setMask(configs.keySet())
                                                             .setHwAddr(sw.getPort(port).getHwAddr())
                                                             .build();
 
-        // Add the port modification into the history for tracking
-        Map<String, Object> row = new HashMap<String, Object>();
-        row.put(PORTMOD_ID, "id");
-        row.put(DPID, dpid);
-        row.put(PORT, port);
-        row.put(CONFIG, config);
-        this.storageService.insertRow(TABLE_NAME, row);
-
 	    // Send the message
         if (!sw.write(portMod)) {
-            String err = "Could not send message " + config.toString() + " to port " + port.toString() +
+            String err = "Could not send message " + configs.toString() + " to port " + port.toString() +
                          " on switch " + dpid.toString();
 
             LOG.error(err);
             throw new PortModException(err);
         }
+
+        // Add the port modification into the history for tracking
+        Map<String, Object> row = new HashMap<>();
+        row.put(PORTMOD_ID, "id");
+        row.put(DPID, dpid);
+        row.put(PORT, port);
+        row.put(PORTMOD, portMod);
+        row.put(TIME, Calendar.getInstance().getTime());
+        this.storageService.insertRow(TABLE_NAME, row);
 
         LOG.info("Port successfully modified with: " + portMod.toString());
 	    return portMod;
@@ -154,7 +169,7 @@ public class PortModManager implements IFloodlightModule, IPortModService {
 
         // Check we can work with our arguments
         if (dpid == null || port == null) {
-            String err = "Port description cannot be retrieve with uninitialized data: dpid=" + dpid + "port=" + port;
+            String err = "Port description cannot be retrieved with uninitialized data: dpid=" + dpid + "port=" + port;
             LOG.error(err);
             throw new PortModException(err);
         }
@@ -171,7 +186,7 @@ public class PortModManager implements IFloodlightModule, IPortModService {
 
         // Send the message to the switch
         Future<List<OFPortDescStatsReply>> response = sw.writeStatsRequest(request);
-        Set<OFPortConfig> configs = new HashSet<OFPortConfig>();
+        Set<OFPortConfig> configs = new HashSet<>();
 
         // Extract the message
         try {
@@ -181,7 +196,6 @@ public class PortModManager implements IFloodlightModule, IPortModService {
             // Add each set into our own
             for (OFPortDescStatsReply reply : replies) {
                 for (OFPortDesc portDesc : reply.getEntries()) {
-                    // TODO: Refactor
                     if (portDesc.getPortNo() == port) {
                         configs.addAll(portDesc.getConfig());
                     }
@@ -208,5 +222,77 @@ public class PortModManager implements IFloodlightModule, IPortModService {
                  configs.toString());
 
 	    return configs;
+    }
+
+    @Override
+    public List<OFPortMod> getHistory(DatapathId dpid, OFPort port) throws PortModException {
+        return getHistory(dpid, port, null, null);
+    }
+
+    @Override
+    public List<OFPortMod> getHistory(DatapathId dpid, OFPort port, Date startTime, Date endTime)
+            throws PortModException {
+
+	    // Make sure we can work with our parameters
+        if (dpid == null || port == null) {
+            String err = "Port mod history cannot be retrieved with uninitialized data: dpid=" + dpid + "port=" + port;
+            LOG.error(err);
+            throw new PortModException(err);
+        }
+
+        // Create predicates that limit search results from the parameters passed in
+        ArrayList<OperatorPredicate> predicates = new ArrayList<>();
+        predicates.add(new OperatorPredicate(DPID, OperatorPredicate.Operator.EQ, dpid));
+        predicates.add(new OperatorPredicate(PORT, OperatorPredicate.Operator.EQ, port));
+
+        // Only add the time constraints if they are non-null
+        if (startTime != null) {
+            predicates.add(new OperatorPredicate(TIME, OperatorPredicate.Operator.GTE, startTime));
+        }
+
+        if (endTime != null) {
+            predicates.add(new OperatorPredicate(TIME, OperatorPredicate.Operator.LTE, endTime));
+        }
+
+        // Now we have to trick the constructor by using an array instead of variable arguments
+        OperatorPredicate arrPredicates[] = new OperatorPredicate[predicates.size()];
+        arrPredicates = predicates.toArray(arrPredicates);
+        CompoundPredicate query = new CompoundPredicate(CompoundPredicate.Operator.AND, false, arrPredicates);
+
+        // Execute the query on our table
+        IResultSet resultSet = this.storageService.executeQuery(TABLE_NAME, COLUMNS, query, null);
+
+        // Return all of the found port modifications
+        ArrayList<OFPortMod> portMods = new ArrayList<>();
+        while (resultSet.next()) {
+            portMods.add((OFPortMod) resultSet.getRow().get(PORTMOD));
+        }
+        resultSet.close();
+
+        LOG.info("Found " + portMods.size() + " port modifications on port " + port.toString() + " on switch " +
+                 dpid.toString() + " between start time " + ((startTime != null) ? startTime.toString() : "N/A") +
+                 " and end time " + ((endTime != null) ? endTime.toString() : "N/A"));
+        return portMods;
+    }
+
+    /**
+     * Searches the configurations to be applied for enabled flags and returns the set of configurations
+     * that are enabled.
+     *
+     * @param configs Original map of configurations and their respective enabled flags
+     * @return Set of configurations that are enabled
+     */
+    private Set<OFPortConfig> getEnabledConfigs(Map<OFPortConfig, Boolean> configs) {
+	    // Extract the configurations to be applied
+	    Set<OFPortConfig> enabledConfigs = new HashSet<>(configs.keySet());
+
+	    // Strip away the configurations that are being disabled
+        for (Map.Entry<OFPortConfig, Boolean> entry : configs.entrySet()) {
+            if (!entry.getValue()) {
+                enabledConfigs.remove(entry.getKey());
+            }
+        }
+
+        return enabledConfigs;
     }
 }
