@@ -39,7 +39,7 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 
 	private static boolean isEnabled = false;
 	
-	private static int portStatsInterval = 1; /* could be set by REST API, so not final */
+	private static int portStatsInterval = 3; /* could be set by REST API, so not final */
 	private static ScheduledFuture<?> portStatsCollector;
 	private static ScheduledFuture<?> flowStatsCollector;
 
@@ -171,16 +171,26 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 	
 	
 	/*
-	 * Added by Charlie Hardwick-Kelly Carleton University 
-	 * The goal with this class is to either pick out flow statistics or get the
-	 * meter statistics again 
+	 * 	Added by Charlie Hardwick-Kelly Carleton University 
+	 * 	The purpose of this class is to track per flow metrics from within the network  
+	 * 	one key advantage of the flow metrics is that they contain a duration time stamp 
+	 * 	this eliminates the error involved from the control plane and allows us to compute the bandwidth of 
+	 * 	a particular flow with greater accuracy
+	 * 
+	 *  	Steps 
+	 * 		1. issue a meter stats reply 
+	 * 		2. Analyze the variables   the 
+	 * 
+	 * 	The good news about this technique is that we use the time stamped from within the flow  
+	 * 
+	 * 
 	 */
 	protected class FlowStatsCollector implements Runnable {
 
 		@Override
 		public void run() {
 			Map<DatapathId, List<OFStatsReply>> meterReplies = getSwitchStatistics(switchService.getAllSwitchDpids(), OFStatsType.METER);
-			Map<DatapathId, List<OFStatsReply>> flowReplies = getSwitchStatistics(switchService.getAllSwitchDpids(), OFStatsType.FLOW);
+		//	Map<DatapathId, List<OFStatsReply>> flowReplies = getSwitchStatistics(switchService.getAllSwitchDpids(), OFStatsType.FLOW);
 			for (Entry<DatapathId, List<OFStatsReply>> e : meterReplies.entrySet()) {
 				for (OFStatsReply r : e.getValue()) {
 					DatapathId sw = e.getKey(); 
@@ -196,13 +206,7 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 						
 						if(meterStats.containsKey(nmt)) {
 							MeterBandwidth stat = meterStats.get(nmt);
-							System.out.println("The stat looks like sw : "+ stat.getSwitchId() + " bytesIn: " +  stat.getBytesIn() + " Duration " + stat.getUpdateTime() + " speed " + stat.getFlowSpeedBitsPerSec());
-							
-							// now we need to update the stats 
-							
-							// first calculate the bandwidth in bps
-							
-							
+							System.out.println("The stat looks like sw : "+ stat.getSwitchId() + " bytesIn: " +  stat.getBytesIn() + " Duration " + stat.getUpdateTime() + " speed " + stat.getFlowSpeedBitsPerSec().getValue());
 							// diff in bytes 
 							U64 byteDiff = bytesIn.subtract(stat.getBytesIn());
 							//The diff in time
@@ -325,7 +329,7 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 
 		if (config.containsKey(INTERVAL_PORT_STATS_STR)) {
 			try {
-				portStatsInterval = Integer.parseInt(config.get(INTERVAL_PORT_STATS_STR).trim());
+				//portStatsInterval = Integer.parseInt(config.get(INTERVAL_PORT_STATS_STR).trim());
 			} catch (Exception e) {
 				log.error("Could not parse '{}'. Using default of {}", INTERVAL_PORT_STATS_STR, portStatsInterval);
 			}
