@@ -205,4 +205,9 @@ public interface ILinkDiscovery {
             }
         }
     }
+
+    public enum LinkState {
+        UP,
+        DOWN
+    }
 }
