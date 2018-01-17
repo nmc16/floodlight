@@ -69,8 +69,7 @@ public class PortModHistoryResource extends ServerResource {
                                                                        .get(IPortModService.class.getCanonicalName());
 
         // We have to add our custom deserializer here because we don't own the OFPortMod class
-        SimpleModule simpleModule = new SimpleModule("SimpleModule").addSerializer(OFPortMod.class,
-                                                                                         new OFPortModSerializer());
+        SimpleModule simpleModule = new SimpleModule().addSerializer(OFPortMod.class, new OFPortModSerializer());
         ObjectMapper objectMapper = new ObjectMapper().registerModule(simpleModule);
 
         // Convert the times to dates if possible, otherwise just leave them as null

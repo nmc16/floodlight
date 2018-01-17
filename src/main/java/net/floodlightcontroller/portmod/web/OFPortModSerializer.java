@@ -70,6 +70,5 @@ public class OFPortModSerializer extends JsonSerializer<OFPortMod> {
 
         // End the JSON string
         jsonGenerator.writeEndObject();
-        jsonGenerator.close();
     }
 }

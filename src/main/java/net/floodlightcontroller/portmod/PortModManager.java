@@ -36,12 +36,11 @@ public class PortModManager implements IFloodlightModule, IPortModService {
 
 	// Database constant values
     private static final String TABLE_NAME = "controller_portmodhistory";
-    private static final String PORTMOD_ID = "id";
     private static final String DPID = "dpid";
     private static final String PORT = "port";
     private static final String PORTMOD = "portmod";
     private static final String TIME = "time";
-    private static final String COLUMNS[] = {PORTMOD_ID, DPID, PORT, PORTMOD, TIME};
+    private static final String COLUMNS[] = {DPID, PORT, PORTMOD, TIME};
 
     private static final long REQUEST_TIMEOUT_MSEC = 1000;
 	
@@ -99,7 +98,6 @@ public class PortModManager implements IFloodlightModule, IPortModService {
 
 		// Create our database table for current and old port modifications
         this.storageService.createTable(TABLE_NAME, null);
-        this.storageService.setTablePrimaryKeyName(TABLE_NAME, PORTMOD_ID);
 
 		// Tell the world we have loaded
 		LOG.info("Loaded module: Port modifications");
@@ -153,7 +151,6 @@ public class PortModManager implements IFloodlightModule, IPortModService {
 
         // Add the port modification into the history for tracking
         Map<String, Object> row = new HashMap<>();
-        row.put(PORTMOD_ID, "id");
         row.put(DPID, dpid);
         row.put(PORT, port);
         row.put(PORTMOD, portMod);
