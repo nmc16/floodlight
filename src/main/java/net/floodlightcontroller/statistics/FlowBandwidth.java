@@ -1,11 +1,10 @@
 package net.floodlightcontroller.statistics;
 
 
-import java.util.Date;
+
 
 import org.projectfloodlight.openflow.protocol.match.Match;
 import org.projectfloodlight.openflow.types.DatapathId;
-import org.projectfloodlight.openflow.types.OFPort;
 import org.projectfloodlight.openflow.types.U64;
 
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
@@ -16,48 +15,37 @@ import net.floodlightcontroller.statistics.web.SwitchPortBandwidthSerializer;
 public class FlowBandwidth {
 	private DatapathId id;
 	private Match match; 
+	private long duration;
+	private U64 bytes;
 	private U64 speed;
-	private U64 rx;
-	private U64 tx;
-	private Date time;
-	private U64 rxValue;
-	private U64 txValue;
 	
 	private FlowBandwidth() {}
-	private FlowBandwidth(DatapathId d, Match m, U64 s, U64 rx, U64 tx, U64 rxValue, U64 txValue) {
+	private FlowBandwidth(DatapathId d, Match m, long dur, U64 b, U64 s) {
 		id = d;
 		match = m;
+		duration = dur;
+		bytes = b;
 		speed = s;
-		this.rx = rx;
-		this.tx = tx;
-		time = new Date();
-		this.rxValue = rxValue;
-		this.txValue = txValue;
+
 	}
 	
-	public static FlowBandwidth of(DatapathId d,Match m, U64 s, U64 rx, U64 tx, U64 rxValue, U64 txValue) {
+	public static FlowBandwidth of(DatapathId d, Match m, long dur, U64 b, U64 s) {
 		if (d == null) {
 			throw new IllegalArgumentException("Datapath ID cannot be null");
 		}
 		if (m == null) {
 			throw new IllegalArgumentException("Match cannot be null");
 		}
+		if(dur < 0) {
+			throw new IllegalArgumentException("Duration cannot be negative");
+		}
+		if (b == null) {
+			throw new IllegalArgumentException("bytes cannot be null");
+		}	
 		if (s == null) {
 			throw new IllegalArgumentException("Link speed cannot be null");
 		}
-		if (rx == null) {
-			throw new IllegalArgumentException("RX bandwidth cannot be null");
-		}
-		if (tx == null) {
-			throw new IllegalArgumentException("TX bandwidth cannot be null");
-		}
-		if (rxValue == null) {
-			throw new IllegalArgumentException("RX value cannot be null");
-		}
-		if (txValue == null) {
-			throw new IllegalArgumentException("TX value cannot be null");
-		}
-		return new FlowBandwidth(d,m, s, rx, tx, rxValue, txValue);
+		return new FlowBandwidth(d,m,dur, b, s);
 	}
 	
 	public DatapathId getSwitchId() {
@@ -68,29 +56,18 @@ public class FlowBandwidth {
 		return match;
 	}
 	
-	public U64 getLinkSpeedBitsPerSec() {
+	public long getDuration() {
+		return duration;
+	}
+	
+	public U64 getFlowSpeedBitsPerSec() {
 		return speed;
 	}
 	
-	public U64 getBitsPerSecondRx() {
-		return rx;
+	public U64 getBytes() {
+		return bytes;
 	}
 	
-	public U64 getBitsPerSecondTx() {
-		return tx;
-	}
-	
-	protected U64 getPriorByteValueRx() {
-		return rxValue;
-	}
-	
-	protected U64 getPriorByteValueTx() {
-		return txValue;
-	}
-	
-	public long getUpdateTime() {
-		return time.getTime();
-	}
 		
 	@Override
 	public int hashCode() {
