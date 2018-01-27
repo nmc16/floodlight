@@ -17,10 +17,10 @@ public class FlowBandwidth {
 	private Match match; 
 	private long duration;
 	private U64 bytes;
-	private U64 speed;
+	private long speed;
 	
 	private FlowBandwidth() {}
-	private FlowBandwidth(DatapathId d, Match m, long dur, U64 b, U64 s) {
+	private FlowBandwidth(DatapathId d, Match m, long dur, U64 b, long s) {
 		id = d;
 		match = m;
 		duration = dur;
@@ -29,20 +29,25 @@ public class FlowBandwidth {
 
 	}
 	
-	public static FlowBandwidth of(DatapathId d, Match m, long dur, U64 b, U64 s) {
+	public static FlowBandwidth of(DatapathId d, Match m, long dur, U64 b, long s) {
 		if (d == null) {
+			System.out.println("Bad flow bandwidth");
 			throw new IllegalArgumentException("Datapath ID cannot be null");
 		}
 		if (m == null) {
+			System.out.println("Bad flow bandwidth");
 			throw new IllegalArgumentException("Match cannot be null");
 		}
 		if(dur < 0) {
+			System.out.println("Bad flow bandwidth");
 			throw new IllegalArgumentException("Duration cannot be negative");
 		}
 		if (b == null) {
+			System.out.println("Bad flow bandwidth");
 			throw new IllegalArgumentException("bytes cannot be null");
 		}	
-		if (s == null) {
+		if (s < 0) {
+			System.out.println("Bad flow bandwidth");
 			throw new IllegalArgumentException("Link speed cannot be null");
 		}
 		return new FlowBandwidth(d,m,dur, b, s);
@@ -60,7 +65,7 @@ public class FlowBandwidth {
 		return duration;
 	}
 	
-	public U64 getFlowSpeedBitsPerSec() {
+	public long getFlowSpeedBitsPerSec() {
 		return speed;
 	}
 	

@@ -40,7 +40,7 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 
 	private static boolean isEnabled = false;
 	
-	private static int portStatsInterval = 5; /* could be set by REST API, so not final */
+	private static int portStatsInterval = 2; /* could be set by REST API, so not final */
 	private static ScheduledFuture<?> portStatsCollector;
 	private static ScheduledFuture<?> flowStatsCollector;
 
@@ -227,14 +227,13 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 				}	
 				System.out.println("---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------");
 			}*/
-			
-			
-				
+			//kirthanaIsTheFreshestPrincessOfBelair				
 			for (Entry<DatapathId, List<OFStatsReply>> e : flowReplies.entrySet()) {
 				for (OFStatsReply r : e.getValue()) {
 
 					OFFlowStatsReply fsr = (OFFlowStatsReply) r; 
 					for ( OFFlowStatsEntry fse : fsr.getEntries()) {
+						
 						//System.out.println("The stat is: " + mse);	
 						DatapathId sw = e.getKey();
 						Match match = fse.getMatch(); 
@@ -242,37 +241,51 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 						long dur = fse.getDurationSec(); //take in the duration 
 						// now I need to set up the comparisons 
 						NodeFlowTuple nft = new NodeFlowTuple(sw,match) ;
-						
-						
-						
 						if(flowStats.containsKey(nft)){	
 							//System.out.println("This might actually work we found:" + nft.toString() + "Twice");	
-							
 							FlowBandwidth stat = flowStats.get(nft);
-							System.out.println("The Flow stats looks like sw : "+ stat.getSwitchId() + " Match: " +  stat.getMatch() + " Duration " + stat.getDuration() + " Bytes: " + stat.getBytes().getValue() +  " speed " + stat.getFlowSpeedBitsPerSec().getValue());
+							//System.out.println("The Flow stats looks like sw : "+ stat.getSwitchId() + " Match: " +  stat.getMatch() + " Duration " + stat.getDuration() + " Bytes: " + stat.getBytes().getValue() +  " speed " + stat.getFlowSpeedBitsPerSec().getValue());
+							
+							
 							// diff in bytes 
-							U64 byteDiff = bytesCount.subtract(stat.getBytes());
+							long x = bytesCount.getValue();
+							long y = stat.getBytes().getValue();
+							
+							
+							long diff = x-y;
+							
+							
+							//U64 byteDiff = bytesCount.subtract(stat.getBytes());
+							
+							
+							//U64 upper = U64.NO_MASK.subtract(spb.getPriorByteValueRx());
+							
 							//The diff in time
 							long timediff = dur - stat.getDuration();
 							
+							long pre = diff*8;
+							long speed;
 							
-							//Update the existing  stats info in the hash 
-							//meterStats.put(nmt, MeterBandwidth.of(sw, meterId, dur, bytesIn, U64.ofRaw((byteDiff.getValue() * BITS_PER_BYTE) / timediff) )); 
-										
-							 if(flowStats.put(nft, FlowBandwidth.of(sw, match, dur, bytesCount, U64.ofRaw((byteDiff.getValue() * BITS_PER_BYTE) / timediff))) != null) {
-								//System.out.println("Success put the stat in");
-							 }else {
-								 System.out.println("We have a problem");
-							 }
+							if(pre!=0){							
+								speed= pre/timediff;
+							}else {
+								speed= 0;
+							}
+							System.out.println("sw: "+ sw+ " speed: "+ speed + " bytes: " + bytesCount.getValue() + " Dur: " +dur) ;
 							
-							
-							
+							try {
+								FlowBandwidth test = FlowBandwidth.of(sw, match, dur, bytesCount, speed);
+								flowStats.put(nft,test);		
+							}catch(IllegalArgumentException exc) {
+								System.out.println("Bad flow bandwidth" + exc);
+							}
+
 							
 						}else {
 						
 							//if there is no existing stat add one in with the new info
 							//d,m,dur, b, s
-							flowStats.put(nft, FlowBandwidth.of(sw, match, dur, bytesCount, U64.ZERO)); 	
+							flowStats.put(nft, FlowBandwidth.of(sw, match, dur, bytesCount, 0)); 	
 							
 						}
 			
@@ -488,7 +501,7 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 			}
 
 			try {
-				Thread.sleep(1000);
+				Thread.sleep(500);
 			} catch (InterruptedException e) {
 				log.error("Interrupted while waiting for statistics", e);
 			}
