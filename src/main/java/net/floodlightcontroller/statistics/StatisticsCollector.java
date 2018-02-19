@@ -16,6 +16,7 @@ import net.floodlightcontroller.statistics.web.SwitchStatisticsWebRoutable;
 import net.floodlightcontroller.threadpool.IThreadPoolService;
 import org.projectfloodlight.openflow.protocol.*;
 import org.projectfloodlight.openflow.protocol.match.Match;
+import org.projectfloodlight.openflow.protocol.match.MatchField;
 import org.projectfloodlight.openflow.protocol.ver13.OFMeterSerializerVer13;
 import org.projectfloodlight.openflow.types.DatapathId;
 import org.projectfloodlight.openflow.types.OFGroup;
@@ -128,7 +129,7 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 							
 						} else { /* initialize */
 							tentativePortStats.put(npt, SwitchPortBandwidth.of(npt.getNodeId(), npt.getPortId(), U64.ZERO, U64.ZERO, U64.ZERO, pse.getRxBytes(), pse.getTxBytes()));
-						}
+						}//
 					}
 				}
 			}
@@ -227,7 +228,8 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 				}	
 				System.out.println("---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------");
 			}*/
-			//kirthanaIsTheFreshestPrincessOfBelair				
+			//kirthanaIsTheFreshestPrincessOfBelair		
+			System.out.print("\033[H\033[2J");
 			for (Entry<DatapathId, List<OFStatsReply>> e : flowReplies.entrySet()) {
 				for (OFStatsReply r : e.getValue()) {
 
@@ -236,7 +238,12 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 						
 						//System.out.println("The stat is: " + mse);	
 						DatapathId sw = e.getKey();
+				
 						Match match = fse.getMatch(); 
+						
+						
+						System.out.println(match);
+						
 						U64 bytesCount = fse.getByteCount(); //take in the number of bytes  
 						long dur = fse.getDurationSec(); //take in the duration 
 						// now I need to set up the comparisons 
@@ -271,11 +278,22 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 							}else {
 								speed= 0;
 							}
-							System.out.println("sw: "+ sw+ " speed: "+ speed + " bytes: " + bytesCount.getValue() + " Dur: " +dur) ;
-							
+							if(speed >0) {
+								System.out.println("sw: "+ sw+ " speed(bps): "+ speed  + " bytes:" + bytesCount.getValue() + " Duration (s): " +dur) ;
+							}
 							try {
-								FlowBandwidth test = FlowBandwidth.of(sw, match, dur, bytesCount, speed);
-								flowStats.put(nft,test);		
+								
+								if(!(speed < 0)) {							
+									FlowBandwidth test = FlowBandwidth.of(sw, match, dur, bytesCount, speed);
+									flowStats.put(nft,test);		
+								}else {
+									// don't want negative speeds just default to 0 
+									FlowBandwidth test = FlowBandwidth.of(sw, match, dur, bytesCount, 0);
+									flowStats.put(nft,test);
+									
+								}
+									
+							
 							}catch(IllegalArgumentException exc) {
 								System.out.println("Bad flow bandwidth" + exc);
 							}
@@ -439,10 +457,11 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 	 * Start all stats threads.
 	 */
 	private void startStatisticsCollection() {
-		//portStatsCollector = threadPoolService.getScheduledExecutor().scheduleAtFixedRate(new PortStatsCollector(), portStatsInterval, portStatsInterval, TimeUnit.SECONDS);
+		portStatsCollector = threadPoolService.getScheduledExecutor().scheduleAtFixedRate(new PortStatsCollector(), portStatsInterval, portStatsInterval, TimeUnit.SECONDS);
 		flowStatsCollector = threadPoolService.getScheduledExecutor().scheduleAtFixedRate(new FlowStatsCollector(), portStatsInterval, portStatsInterval, TimeUnit.SECONDS);
 		tentativePortStats.clear(); /* must clear out, otherwise might have huge BW result if present and wait a long time before re-enabling stats */
 		log.warn("Statistics collection thread(s) started");
+		HashMap<DatapathId, List<OFStatsReply>> model = new HashMap<DatapathId, List<OFStatsReply>>();
 	}
 	
 	/**

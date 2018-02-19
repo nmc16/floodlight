@@ -31,23 +31,18 @@ public class FlowBandwidth {
 	
 	public static FlowBandwidth of(DatapathId d, Match m, long dur, U64 b, long s) {
 		if (d == null) {
-			System.out.println("Bad flow bandwidth");
 			throw new IllegalArgumentException("Datapath ID cannot be null");
 		}
 		if (m == null) {
-			System.out.println("Bad flow bandwidth");
 			throw new IllegalArgumentException("Match cannot be null");
 		}
 		if(dur < 0) {
-			System.out.println("Bad flow bandwidth");
 			throw new IllegalArgumentException("Duration cannot be negative");
 		}
 		if (b == null) {
-			System.out.println("Bad flow bandwidth");
 			throw new IllegalArgumentException("bytes cannot be null");
 		}	
 		if (s < 0) {
-			System.out.println("Bad flow bandwidth");
 			throw new IllegalArgumentException("Link speed cannot be null");
 		}
 		return new FlowBandwidth(d,m,dur, b, s);
