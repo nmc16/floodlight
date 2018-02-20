@@ -1,6 +1,6 @@
 package net.floodlightcontroller.websocket;
 
-import java.util.Collection;
+import java.util.Collection; 
 import java.util.Map;
 import java.util.Set;
 
@@ -9,6 +9,7 @@ import net.floodlightcontroller.core.module.FloodlightModuleContext;
 import net.floodlightcontroller.core.module.FloodlightModuleException;
 import net.floodlightcontroller.core.module.IFloodlightModule;
 import net.floodlightcontroller.core.module.IFloodlightService;
+import net.floodlightcontroller.portmod.PortModManager;
 import net.floodlightcontroller.storage.IStorageSourceListener;
 
 
@@ -20,9 +21,12 @@ import java.util.concurrent.ConcurrentSkipListSet;
 
 public class webSocket implements IStorageSourceListener, IFloodlightModule {
 	
+	// Class logger
+	private static final Logger logger = LoggerFactory.getLogger(webSocket.class);
+	
 	protected IFloodlightProviderService floodlightProvider;
 	protected Set<Long> macAddresses;
-	protected static Logger logger;
+
 
 	
 	@Override
@@ -52,13 +56,17 @@ public class webSocket implements IStorageSourceListener, IFloodlightModule {
 		// TODO Auto-generated method stub
 		floodlightProvider = context.getServiceImpl(IFloodlightProviderService.class);
 	    macAddresses = new ConcurrentSkipListSet<Long>();
-	    logger = LoggerFactory.getLogger(webSocket.class);
+	
+	    logger.warn("BINGO BINGO!");
+	    logger.info("Test test TESTTTTTTTTTTTTest test TESTTTTTTTTTTT");
+	    
 
 	}
 
 	@Override
-	public void startUp(FloodlightModuleContext context)
-			throws FloodlightModuleException {
+	public void startUp(FloodlightModuleContext context) throws FloodlightModuleException {
+		
+		 logger.info("Test test TESTTTTTTTTTTTTest test TESTTTTTTTTTTT");
 		// TODO Auto-generated method stub
 		//floodlightProvider.addOFMessageListener(OFType.PACKET_IN, this);
 		
@@ -68,12 +76,14 @@ public class webSocket implements IStorageSourceListener, IFloodlightModule {
 	@Override
 	public void rowsModified(String tableName, Set<Object> rowKeys) {
 		// TODO Auto-generated method stub
-		System.out.print(tableName);
+		logger.info("Test test TESTTTTTTTTTTTTest test TESTTTTTTTTTTT");
 	}
 
 	@Override
 	public void rowsDeleted(String tableName, Set<Object> rowKeys) {
 		// TODO Auto-generated method stub
+		 logger.warn("BINGO BINGO!");
+		 logger.info("Test test TESTTTTTTTTTTTTest test TESTTTTTTTTTTT");
 
 	}
 
