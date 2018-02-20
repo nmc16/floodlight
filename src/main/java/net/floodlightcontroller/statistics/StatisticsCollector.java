@@ -51,6 +51,8 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 	
 	private static final String INTERVAL_PORT_STATS_STR = "collectionIntervalPortStatsSeconds";
 	private static final String ENABLED_STR = "enable";
+	
+	private static boolean collectMeterStats = false;
 
 	private static final HashMap<NodePortTuple, SwitchPortBandwidth> portStats = new HashMap<NodePortTuple, SwitchPortBandwidth>();
 	private static final HashMap<NodeMeterTuple, MeterBandwidth> meterStats = new HashMap<NodeMeterTuple, MeterBandwidth>();
@@ -195,56 +197,51 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 
 		@Override
 		public void run() {
-			//Map<DatapathId, List<OFStatsReply>> meterReplies = getSwitchStatistics(switchService.getAllSwitchDpids(), OFStatsType.METER);
+			Map<DatapathId, List<OFStatsReply>> meterReplies = getSwitchStatistics(switchService.getAllSwitchDpids(), OFStatsType.METER);
 			Map<DatapathId, List<OFStatsReply>> flowReplies = getSwitchStatistics(switchService.getAllSwitchDpids(), OFStatsType.FLOW);
-			/*for (Entry<DatapathId, List<OFStatsReply>> e : meterReplies.entrySet()) {
-				for (OFStatsReply r : e.getValue()) {
-					DatapathId sw = e.getKey(); 
-					// at this point I have the meter stats I need to compare them and 
-					OFMeterStatsReply msr = (OFMeterStatsReply) r;
-					for ( OFMeterStats mse : msr.getEntries()) {
-						//System.out.println("The stat is: " + mse);	
-						long meterId = mse.getMeterId(); 
-						U64 bytesIn = mse.getByteInCount(); //take in the number of bytes  
-						long dur = mse.getDurationSec(); //take in the duration 
-						// now I need to set up the comparisons 
-						NodeMeterTuple nmt = new NodeMeterTuple(sw,meterId) ;
-						
-						if(meterStats.containsKey(nmt)) {
-							MeterBandwidth stat = meterStats.get(nmt);
-							System.out.println("The Meter stats looks like sw : "+ stat.getSwitchId() + " bytesIn: " +  stat.getBytesIn() + " Duration " + stat.getUpdateTime() + " speed " + stat.getFlowSpeedBitsPerSec().getValue());
-							// diff in bytes 
-							U64 byteDiff = bytesIn.subtract(stat.getBytesIn());
-							//The diff in time
-							long timediff = dur - stat.getUpdateTime();
-							//Update the existing  stats info in the hash 
-							meterStats.put(nmt, MeterBandwidth.of(sw, meterId, dur, bytesIn, U64.ofRaw((byteDiff.getValue() * BITS_PER_BYTE) / timediff) )); 
-	
+			
+			if(collectMeterStats) { // disable meter stats unless needed
+				for (Entry<DatapathId, List<OFStatsReply>> e : meterReplies.entrySet()) {
+					for (OFStatsReply r : e.getValue()) {
+						DatapathId sw = e.getKey(); 
+						// at this point I have the meter stats I need to compare them and 
+						OFMeterStatsReply msr = (OFMeterStatsReply) r;
+						for ( OFMeterStats mse : msr.getEntries()) {	
+							long meterId = mse.getMeterId(); 
+							U64 bytesIn = mse.getByteInCount(); //take in the number of bytes  
+							long dur = mse.getDurationSec(); //take in the duration 
+							// now I need to set up the comparisons 
+							NodeMeterTuple nmt = new NodeMeterTuple(sw,meterId) ;
 							
-						}else {
-							//if there is no existing stat add one in with the new info
-							meterStats.put(nmt, MeterBandwidth.of(sw, meterId, dur, bytesIn, U64.ZERO)); 				
+							if(meterStats.containsKey(nmt)) {
+								MeterBandwidth stat = meterStats.get(nmt);
+								System.out.println("The Meter stats looks like sw : "+ stat.getSwitchId() + " bytesIn: " +  stat.getBytesIn() + " Duration " + stat.getUpdateTime() + " speed " + stat.getFlowSpeedBitsPerSec().getValue());
+								// diff in bytes 
+								U64 byteDiff = bytesIn.subtract(stat.getBytesIn());
+								//The diff in time
+								long timediff = dur - stat.getUpdateTime();
+								//Update the existing  stats info in the hash 
+								meterStats.put(nmt, MeterBandwidth.of(sw, meterId, dur, bytesIn, U64.ofRaw((byteDiff.getValue() * BITS_PER_BYTE) / timediff) )); 
+		
+								
+							}else {
+								//if there is no existing stat add one in with the new info
+								meterStats.put(nmt, MeterBandwidth.of(sw, meterId, dur, bytesIn, U64.ZERO)); 				
+							}
 						}
-					}
-				}	
-				System.out.println("---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------");
-			}*/
-			//kirthanaIsTheFreshestPrincessOfBelair		
-		//	System.out.print("\033[H\033[2J");
+					}	
+					System.out.println("---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------");
+				}		
+			}
+			System.out.print("\033[H\033[2J");// add this to clear the command line every round
 			for (Entry<DatapathId, List<OFStatsReply>> e : flowReplies.entrySet()) {
 				for (OFStatsReply r : e.getValue()) {
 
 					OFFlowStatsReply fsr = (OFFlowStatsReply) r; 
-					for ( OFFlowStatsEntry fse : fsr.getEntries()) {
-						
-						//System.out.println("The stat is: " + mse);	
+					for ( OFFlowStatsEntry fse : fsr.getEntries()) {	
 						DatapathId sw = e.getKey();
-				
-						Match match = fse.getMatch(); 
-						
+						Match match = fse.getMatch(); 						
 						OFPort in_port = match.get(MatchField.IN_PORT);
-				
-						
 						U64 bytesCount = fse.getByteCount(); //take in the number of bytes  
 						long dur = fse.getDurationSec(); //take in the duration 
 						// now I need to set up the comparisons 
@@ -262,12 +259,12 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 							
 							long diff = x-y;
 							
-							//Calculate the difference in time between the current and previouse stat response
+							//Calculate the difference in time between the current and previous stat response
 							long timediff = dur - stat.getDuration();
 							
-							long pre = diff*8;
+							long pre = diff*8; // multiply by 8 to get bits per second
 							long speed;
-							
+							// Avoid divide by zero error
 							if(pre!=0){							
 								speed= pre/timediff;
 							}else {
@@ -277,7 +274,6 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 								System.out.println("sw: "+ sw+ " speed(bps): "+ speed  + " bytes:" + bytesCount.getValue() + " Duration (s): " +dur + " In_Port: " + in_port) ;
 							}
 							try {
-								
 								if(!(speed < 0)) {							
 									FlowBandwidth test = FlowBandwidth.of(sw, match, dur, bytesCount, speed,in_port);
 									flowStats.put(nft,test);		
@@ -288,8 +284,6 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 									flowStats.put(nft,test);
 									
 								}
-									
-							
 							}catch(IllegalArgumentException exc) {
 								System.out.println("Bad flow bandwidth" + exc);
 							}
@@ -302,15 +296,7 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 							flowStats.put(nft, FlowBandwidth.of(sw, match, dur, bytesCount, 0,in_port)); 	
 							
 						}
-			
-					//	System.out.println("The switch is: " + e.getKey() + "The stat is: " + fse);	
-						
 					}
-					//OFMeterStatsReply msr = (OFMeterStatsReply) r;
-					//for ( OFMeterStats mse : msr.getEntries()) {
-					//	System.out.println("The stat is: " + mse);	
-						
-					//}
 					
 					System.out.println("###########################################################################################################################################################################################");
 	
