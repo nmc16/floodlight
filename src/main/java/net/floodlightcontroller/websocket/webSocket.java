@@ -35,19 +35,22 @@ public class webSocket implements IStorageSourceListener, IFloodlightModule {
 	// Class logger
 	private static final Logger logger = LoggerFactory.getLogger(webSocket.class);
 	
-	protected IFloodlightProviderService floodlightProvider;
+	
 	protected IStorageSourceService storageSourceService;
-	protected Set<Long> macAddresses;
 
-	private static final String TOPOLOGY_TABLE_NAME = "controller_topologyconfig";
+
+	private static final String TOPOLOGY_TABLE_NAME = "controller_firewallrules";
 	
 	@Override
 	public Collection<Class<? extends IFloodlightService>> getModuleServices() {
 		
+		/*
 		Collection<Class<? extends IFloodlightService>> l =
 		        new ArrayList<Class<? extends IFloodlightService>>();
-		    l.add(IFloodlightProviderService.class);
+		    l.add(IStorageSourceService.class);
 		    return l;
+		    */
+		return null;
 	}
 
 	@Override
@@ -59,11 +62,16 @@ public class webSocket implements IStorageSourceListener, IFloodlightModule {
 	@Override
 	public Collection<Class<? extends IFloodlightService>> getModuleDependencies() {
 		
+		
 		Collection<Class<? extends IFloodlightService>> l =
 				new ArrayList<Class<? extends IFloodlightService>>();
-		l.add(IFloodlightProviderService.class);
+	
 		l.add(IStorageSourceService.class);
 		return l;
+		
+		
+		
+		
 		
 	}
 
@@ -73,12 +81,8 @@ public class webSocket implements IStorageSourceListener, IFloodlightModule {
 	
 		storageSourceService = context.getServiceImpl(IStorageSourceService.class);
 
-		floodlightProvider = context.getServiceImpl(IFloodlightProviderService.class);
-	    macAddresses = new ConcurrentSkipListSet<Long>();
 	
-	    logger.warn("BINGO BINGO!");
-	    logger.info("Test test TESTTTTTTTTTTTTest test TESTTTTTTTTTTT");
-	    
+	    logger.warn("made it to init");
 
 	}
 
@@ -87,12 +91,12 @@ public class webSocket implements IStorageSourceListener, IFloodlightModule {
 		
 		
 		
-		logger.info("Test test TESTTTTTTTTTTTTest test TESTTTTTTTTTTT");
+		logger.info("made it before startup");
 		// Register for storage updates for the switch table
 			try {
 			
 				storageSourceService.addListener(TOPOLOGY_TABLE_NAME, this);
-				logger.info("Test test TESTTTTTTTTTTTTest test TESTTTTTTTTTTT");
+				logger.info("inside startup");
 			} catch (StorageException ex) {
 				logger.error("Error in installing listener for "
 						+ "switch table {}");
@@ -129,7 +133,7 @@ public class webSocket implements IStorageSourceListener, IFloodlightModule {
 			readTopologyConfigFromStorage();
 			return;
 		}
-		logger.info("Test test TESTTTTTTTTTTTTest test TESTTTTTTTTTTT");
+		logger.info("rows modified for table");
 	}
 
 	@Override
@@ -137,10 +141,11 @@ public class webSocket implements IStorageSourceListener, IFloodlightModule {
 		if (tableName.equals(TOPOLOGY_TABLE_NAME)) {
 			logger.warn(tableName);
 			readTopologyConfigFromStorage();
+			logger.info("rows deleted1");
 			return;
 		}
-		 logger.warn("BINGO BINGO!");
-		 logger.info("Test test TESTTTTTTTTTTTTest test TESTTTTTTTTTTT");
+
+		 logger.info("rows deleted2");
 
 	}
 	
@@ -148,7 +153,7 @@ public class webSocket implements IStorageSourceListener, IFloodlightModule {
 		IResultSet topologyResult = storageSourceService.executeQuery(TOPOLOGY_TABLE_NAME,
 				null, null,
 				null);
-		logger.warn("BINGO BINGO!");
+		logger.warn("read topology");
 		
 
 	}
