@@ -5,6 +5,7 @@ package net.floodlightcontroller.statistics;
 
 import org.projectfloodlight.openflow.protocol.match.Match;
 import org.projectfloodlight.openflow.types.DatapathId;
+import org.projectfloodlight.openflow.types.OFPort;
 import org.projectfloodlight.openflow.types.U64;
 
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
@@ -18,18 +19,19 @@ public class FlowBandwidth {
 	private long duration;
 	private U64 bytes;
 	private long speed;
+	private OFPort in_port;
 	
 	private FlowBandwidth() {}
-	private FlowBandwidth(DatapathId d, Match m, long dur, U64 b, long s) {
+	private FlowBandwidth(DatapathId d, Match m, long dur, U64 b, long s, OFPort p) {
 		id = d;
 		match = m;
 		duration = dur;
 		bytes = b;
 		speed = s;
-
+		in_port = p;
 	}
 	
-	public static FlowBandwidth of(DatapathId d, Match m, long dur, U64 b, long s) {
+	public static FlowBandwidth of(DatapathId d, Match m, long dur, U64 b, long s, OFPort p) {
 		if (d == null) {
 			throw new IllegalArgumentException("Datapath ID cannot be null");
 		}
@@ -45,7 +47,8 @@ public class FlowBandwidth {
 		if (s < 0) {
 			throw new IllegalArgumentException("Link speed cannot be null");
 		}
-		return new FlowBandwidth(d,m,dur, b, s);
+		
+		return new FlowBandwidth(d,m,dur, b, s,p);
 	}
 	
 	public DatapathId getSwitchId() {
@@ -66,6 +69,9 @@ public class FlowBandwidth {
 	
 	public U64 getBytes() {
 		return bytes;
+	}
+	public OFPort getInPort() {
+		return in_port;
 	}
 	
 		

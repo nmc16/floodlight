@@ -19,6 +19,7 @@ import org.projectfloodlight.openflow.protocol.match.Match;
 import org.projectfloodlight.openflow.protocol.match.MatchField;
 import org.projectfloodlight.openflow.protocol.ver13.OFMeterSerializerVer13;
 import org.projectfloodlight.openflow.types.DatapathId;
+import org.projectfloodlight.openflow.types.Masked;
 import org.projectfloodlight.openflow.types.OFGroup;
 import org.projectfloodlight.openflow.types.OFPort;
 import org.projectfloodlight.openflow.types.TableId;
@@ -229,7 +230,7 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 				System.out.println("---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------");
 			}*/
 			//kirthanaIsTheFreshestPrincessOfBelair		
-			System.out.print("\033[H\033[2J");
+		//	System.out.print("\033[H\033[2J");
 			for (Entry<DatapathId, List<OFStatsReply>> e : flowReplies.entrySet()) {
 				for (OFStatsReply r : e.getValue()) {
 
@@ -241,8 +242,8 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 				
 						Match match = fse.getMatch(); 
 						
-						
-						System.out.println(match);
+						OFPort in_port = match.get(MatchField.IN_PORT);
+				
 						
 						U64 bytesCount = fse.getByteCount(); //take in the number of bytes  
 						long dur = fse.getDurationSec(); //take in the duration 
@@ -254,20 +255,14 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 							//System.out.println("The Flow stats looks like sw : "+ stat.getSwitchId() + " Match: " +  stat.getMatch() + " Duration " + stat.getDuration() + " Bytes: " + stat.getBytes().getValue() +  " speed " + stat.getFlowSpeedBitsPerSec().getValue());
 							
 							
-							// diff in bytes 
+							//Calculate the bytes difference between current and previous collections 
 							long x = bytesCount.getValue();
 							long y = stat.getBytes().getValue();
 							
 							
 							long diff = x-y;
 							
-							
-							//U64 byteDiff = bytesCount.subtract(stat.getBytes());
-							
-							
-							//U64 upper = U64.NO_MASK.subtract(spb.getPriorByteValueRx());
-							
-							//The diff in time
+							//Calculate the difference in time between the current and previouse stat response
 							long timediff = dur - stat.getDuration();
 							
 							long pre = diff*8;
@@ -279,16 +274,17 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 								speed= 0;
 							}
 							if(speed >0) {
-								System.out.println("sw: "+ sw+ " speed(bps): "+ speed  + " bytes:" + bytesCount.getValue() + " Duration (s): " +dur) ;
+								System.out.println("sw: "+ sw+ " speed(bps): "+ speed  + " bytes:" + bytesCount.getValue() + " Duration (s): " +dur + " In_Port: " + in_port) ;
 							}
 							try {
 								
 								if(!(speed < 0)) {							
-									FlowBandwidth test = FlowBandwidth.of(sw, match, dur, bytesCount, speed);
+									FlowBandwidth test = FlowBandwidth.of(sw, match, dur, bytesCount, speed,in_port);
 									flowStats.put(nft,test);		
 								}else {
-									// don't want negative speeds just default to 0 
-									FlowBandwidth test = FlowBandwidth.of(sw, match, dur, bytesCount, 0);
+									// if we are getting a negative speed a flow has restarted in the system, we do not want to 
+									// send these values or print them out so just insert them into the hash
+									FlowBandwidth test = FlowBandwidth.of(sw, match, dur, bytesCount, 0, in_port);
 									flowStats.put(nft,test);
 									
 								}
@@ -303,7 +299,7 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 						
 							//if there is no existing stat add one in with the new info
 							//d,m,dur, b, s
-							flowStats.put(nft, FlowBandwidth.of(sw, match, dur, bytesCount, 0)); 	
+							flowStats.put(nft, FlowBandwidth.of(sw, match, dur, bytesCount, 0,in_port)); 	
 							
 						}
 			
