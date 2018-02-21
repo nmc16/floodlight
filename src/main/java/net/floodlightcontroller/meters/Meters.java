@@ -1,7 +1,6 @@
 package net.floodlightcontroller.meters;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -12,32 +11,18 @@ import org.projectfloodlight.openflow.protocol.OFFlowAdd;
 import org.projectfloodlight.openflow.protocol.OFFlowMod;
 import org.projectfloodlight.openflow.protocol.OFFlowModCommand;
 import org.projectfloodlight.openflow.protocol.OFInstructionType;
-import org.projectfloodlight.openflow.protocol.OFMatchBmap;
 import org.projectfloodlight.openflow.protocol.OFMessage;
-import org.projectfloodlight.openflow.protocol.OFMeterBandStats;
 import org.projectfloodlight.openflow.protocol.OFMeterMod;
 import org.projectfloodlight.openflow.protocol.OFMeterModCommand;
-import org.projectfloodlight.openflow.protocol.OFPacketIn;
 import org.projectfloodlight.openflow.protocol.OFType;
 import org.projectfloodlight.openflow.protocol.OFMeterFlags;
 import org.projectfloodlight.openflow.protocol.OFVersion;
-import org.projectfloodlight.openflow.protocol.action.OFAction;
-import org.projectfloodlight.openflow.protocol.action.OFActionOutput;
-import org.projectfloodlight.openflow.protocol.action.OFActions;
 import org.projectfloodlight.openflow.protocol.instruction.OFInstruction;
-import org.projectfloodlight.openflow.protocol.instruction.OFInstructionApplyActions;
 import org.projectfloodlight.openflow.protocol.instruction.OFInstructionMeter;
-import org.projectfloodlight.openflow.protocol.instruction.OFInstructions;
 import org.projectfloodlight.openflow.protocol.match.Match;
 import org.projectfloodlight.openflow.protocol.match.MatchField;
 import org.projectfloodlight.openflow.protocol.meterband.OFMeterBand;
-import org.projectfloodlight.openflow.protocol.meterband.OFMeterBandDrop;
-import org.projectfloodlight.openflow.protocol.oxm.OFOxms;
-import org.projectfloodlight.openflow.types.DatapathId;
 import org.projectfloodlight.openflow.types.EthType;
-import org.projectfloodlight.openflow.types.IPv4Address;
-import org.projectfloodlight.openflow.types.IPv4AddressWithMask;
-import org.projectfloodlight.openflow.types.OFPort;
 import org.projectfloodlight.openflow.types.TableId;
 
 import net.floodlightcontroller.core.FloodlightContext;
@@ -51,15 +36,8 @@ import net.floodlightcontroller.core.module.IFloodlightService;
 import net.floodlightcontroller.core.IFloodlightProviderService;
 import java.util.ArrayList;
 import java.util.concurrent.ConcurrentSkipListSet;
-import java.util.concurrent.TimeUnit;
 import java.util.Set;
-
-import net.floodlightcontroller.packet.ARP;
-import net.floodlightcontroller.packet.Ethernet;
-import net.floodlightcontroller.packet.IPv4;
 import net.floodlightcontroller.staticentry.IStaticEntryPusherService;
-import net.floodlightcontroller.util.OFMessageUtils;
-import net.floodlightcontroller.forwarding.Forwarding;
 
 
 
@@ -83,8 +61,6 @@ import org.slf4j.LoggerFactory;
 
 public class Meters implements IOFMessageListener, IFloodlightModule {
 
-	private static final String OFInstructionMeterVer13 = null;
-	private static final String OFInstructionApplyActionsVer13 = null;
 	protected IFloodlightProviderService floodlightProvider;
 	protected Set<Long> Metersin;
 	protected static Logger logger;
@@ -202,6 +178,8 @@ public class Meters implements IOFMessageListener, IFloodlightModule {
 					}
 				
 				}
+			break;
+			default:
 			break;
 		}
         return Command.CONTINUE;

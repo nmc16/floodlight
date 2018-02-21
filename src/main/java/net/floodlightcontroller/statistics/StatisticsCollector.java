@@ -9,7 +9,6 @@ import net.floodlightcontroller.core.module.FloodlightModuleException;
 import net.floodlightcontroller.core.module.IFloodlightModule;
 import net.floodlightcontroller.core.module.IFloodlightService;
 import net.floodlightcontroller.core.types.NodeFlowTuple;
-import net.floodlightcontroller.core.types.NodeMeterTuple;
 import net.floodlightcontroller.core.types.NodePortTuple;
 import net.floodlightcontroller.restserver.IRestApiService;
 import net.floodlightcontroller.statistics.web.SwitchStatisticsWebRoutable;
@@ -19,7 +18,6 @@ import org.projectfloodlight.openflow.protocol.match.Match;
 import org.projectfloodlight.openflow.protocol.match.MatchField;
 import org.projectfloodlight.openflow.protocol.ver13.OFMeterSerializerVer13;
 import org.projectfloodlight.openflow.types.DatapathId;
-import org.projectfloodlight.openflow.types.Masked;
 import org.projectfloodlight.openflow.types.OFGroup;
 import org.projectfloodlight.openflow.types.OFPort;
 import org.projectfloodlight.openflow.types.TableId;
@@ -41,8 +39,10 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 	private static IRestApiService restApiService;
 
 	private static boolean isEnabled = false;
+	private static boolean debug = true;
 	
 	private static int portStatsInterval = 2; /* could be set by REST API, so not final */
+	private static int flowStatsInterval = 2; 
 	private static ScheduledFuture<?> portStatsCollector;
 	private static ScheduledFuture<?> flowStatsCollector;
 
@@ -52,14 +52,9 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 	private static final String INTERVAL_PORT_STATS_STR = "collectionIntervalPortStatsSeconds";
 	private static final String ENABLED_STR = "enable";
 	
-	private static boolean collectMeterStats = false;
-
 	private static final HashMap<NodePortTuple, SwitchPortBandwidth> portStats = new HashMap<NodePortTuple, SwitchPortBandwidth>();
-	private static final HashMap<NodeMeterTuple, MeterBandwidth> meterStats = new HashMap<NodeMeterTuple, MeterBandwidth>();
 	
 	private static final HashMap<NodeFlowTuple, FlowBandwidth> flowStats = new HashMap<NodeFlowTuple, FlowBandwidth>();
-	
-	private static final HashMap<NodeMeterTuple, MeterBandwidth> tentativemeterStats = new HashMap<NodeMeterTuple, MeterBandwidth>();
 	
 	private static final HashMap<NodePortTuple, SwitchPortBandwidth> tentativePortStats = new HashMap<NodePortTuple, SwitchPortBandwidth>();
 
@@ -186,59 +181,27 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 	 * 	a particular flow with greater accuracy
 	 * 
 	 *  	Steps 
-	 * 		1. issue a meter stats reply 
-	 * 		2. Analyze the variables   the 
-	 * 
-	 * 	The good news about this technique is that we use the time stamped from within the flow  
-	 * 
+	 * 		1. issue a meter stats request to all switches in parallel 
+	 * 		2. Analyze the variables 
+	 * 		3. if valid calculate relevant bandwidth 
+	 * 		4. store information in hash 
+	 * 		5. send information to the gui.
 	 * 
 	 */
 	protected class FlowStatsCollector implements Runnable {
 
 		@Override
 		public void run() {
-			Map<DatapathId, List<OFStatsReply>> meterReplies = getSwitchStatistics(switchService.getAllSwitchDpids(), OFStatsType.METER);
 			Map<DatapathId, List<OFStatsReply>> flowReplies = getSwitchStatistics(switchService.getAllSwitchDpids(), OFStatsType.FLOW);
-			
-			if(collectMeterStats) { // disable meter stats unless needed
-				for (Entry<DatapathId, List<OFStatsReply>> e : meterReplies.entrySet()) {
-					for (OFStatsReply r : e.getValue()) {
-						DatapathId sw = e.getKey(); 
-						// at this point I have the meter stats I need to compare them and 
-						OFMeterStatsReply msr = (OFMeterStatsReply) r;
-						for ( OFMeterStats mse : msr.getEntries()) {	
-							long meterId = mse.getMeterId(); 
-							U64 bytesIn = mse.getByteInCount(); //take in the number of bytes  
-							long dur = mse.getDurationSec(); //take in the duration 
-							// now I need to set up the comparisons 
-							NodeMeterTuple nmt = new NodeMeterTuple(sw,meterId) ;
-							
-							if(meterStats.containsKey(nmt)) {
-								MeterBandwidth stat = meterStats.get(nmt);
-								System.out.println("The Meter stats looks like sw : "+ stat.getSwitchId() + " bytesIn: " +  stat.getBytesIn() + " Duration " + stat.getUpdateTime() + " speed " + stat.getFlowSpeedBitsPerSec().getValue());
-								// diff in bytes 
-								U64 byteDiff = bytesIn.subtract(stat.getBytesIn());
-								//The diff in time
-								long timediff = dur - stat.getUpdateTime();
-								//Update the existing  stats info in the hash 
-								meterStats.put(nmt, MeterBandwidth.of(sw, meterId, dur, bytesIn, U64.ofRaw((byteDiff.getValue() * BITS_PER_BYTE) / timediff) )); 
-		
-								
-							}else {
-								//if there is no existing stat add one in with the new info
-								meterStats.put(nmt, MeterBandwidth.of(sw, meterId, dur, bytesIn, U64.ZERO)); 				
-							}
-						}
-					}	
-					System.out.println("---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------");
-				}		
+			if(debug) {
+				System.out.print("\033[H\033[2J");// add this to clear the command line every round only works on real terminal
 			}
-			System.out.print("\033[H\033[2J");// add this to clear the command line every round
 			for (Entry<DatapathId, List<OFStatsReply>> e : flowReplies.entrySet()) {
 				for (OFStatsReply r : e.getValue()) {
 
 					OFFlowStatsReply fsr = (OFFlowStatsReply) r; 
-					for ( OFFlowStatsEntry fse : fsr.getEntries()) {	
+					for ( OFFlowStatsEntry fse : fsr.getEntries()) {
+						//extract the necessary information from the existing stats and 
 						DatapathId sw = e.getKey();
 						Match match = fse.getMatch(); 						
 						OFPort in_port = match.get(MatchField.IN_PORT);
@@ -247,39 +210,44 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 						// now I need to set up the comparisons 
 						NodeFlowTuple nft = new NodeFlowTuple(sw,match) ;
 						if(flowStats.containsKey(nft)){	
-							//System.out.println("This might actually work we found:" + nft.toString() + "Twice");	
+							//Retrieve the previous stat response information from the hash
 							FlowBandwidth stat = flowStats.get(nft);
-							//System.out.println("The Flow stats looks like sw : "+ stat.getSwitchId() + " Match: " +  stat.getMatch() + " Duration " + stat.getDuration() + " Bytes: " + stat.getBytes().getValue() +  " speed " + stat.getFlowSpeedBitsPerSec().getValue());
 							
-							
-							//Calculate the bytes difference between current and previous collections 
-							long x = bytesCount.getValue();
-							long y = stat.getBytes().getValue();
-							
-							
-							long diff = x-y;
+							//Calculate the bytes difference between current and previous collections
+							// convert from bytes to bits 
+							long byteDiff = (bytesCount.getValue() - stat.getBytes().getValue())*BITS_PER_BYTE;
 							
 							//Calculate the difference in time between the current and previous stat response
 							long timediff = dur - stat.getDuration();
 							
-							long pre = diff*8; // multiply by 8 to get bits per second
 							long speed;
 							// Avoid divide by zero error
-							if(pre!=0){							
-								speed= pre/timediff;
+							if(byteDiff!=0){							
+								speed= byteDiff/timediff;
 							}else {
 								speed= 0;
 							}
-							if(speed >0) {
-								System.out.println("sw: "+ sw+ " speed(bps): "+ speed  + " bytes:" + bytesCount.getValue() + " Duration (s): " +dur + " In_Port: " + in_port) ;
-							}
 							try {
-								if(!(speed < 0)) {							
+								if(!(speed < 0)) {		
+									// if we have a valid flow we want to update the hash and then send the information to the GUI
+									
+									
 									FlowBandwidth test = FlowBandwidth.of(sw, match, dur, bytesCount, speed,in_port);
 									flowStats.put(nft,test);		
+									
+									//The SOCKET send to the gui should be implemented here 
+									
+									
+									
+									if(debug) {
+										System.out.println("sw: "+ sw+ " speed(bps): "+ speed  + " bytes:" + bytesCount.getValue() + " Duration (s): " +dur + " In_Port: " + in_port) ;
+									}
+									
+									
+									
 								}else {
-									// if we are getting a negative speed a flow has restarted in the system, we do not want to 
-									// send these values or print them out so just insert them into the hash
+									// if we are getting a negative speed a flow has restarted in the network, we do not want to 
+									// send these values or print them out so just insert them into the hash default speed to 0
 									FlowBandwidth test = FlowBandwidth.of(sw, match, dur, bytesCount, 0, in_port);
 									flowStats.put(nft,test);
 									
@@ -291,15 +259,14 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 							
 						}else {
 						
-							//if there is no existing stat add one in with the new info
-							//d,m,dur, b, s
+							//if there is no existing flow stat insert with default 0 speed
 							flowStats.put(nft, FlowBandwidth.of(sw, match, dur, bytesCount, 0,in_port)); 	
 							
 						}
 					}
-					
-					System.out.println("###########################################################################################################################################################################################");
-	
+					if(debug) {
+						System.out.println("###########################################################################################################################################################################################");
+					}
 				}	
 			}	
 			
@@ -440,10 +407,9 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 	 */
 	private void startStatisticsCollection() {
 		portStatsCollector = threadPoolService.getScheduledExecutor().scheduleAtFixedRate(new PortStatsCollector(), portStatsInterval, portStatsInterval, TimeUnit.SECONDS);
-		flowStatsCollector = threadPoolService.getScheduledExecutor().scheduleAtFixedRate(new FlowStatsCollector(), portStatsInterval, portStatsInterval, TimeUnit.SECONDS);
+		flowStatsCollector = threadPoolService.getScheduledExecutor().scheduleAtFixedRate(new FlowStatsCollector(), flowStatsInterval, flowStatsInterval, TimeUnit.SECONDS);
 		tentativePortStats.clear(); /* must clear out, otherwise might have huge BW result if present and wait a long time before re-enabling stats */
 		log.warn("Statistics collection thread(s) started");
-		HashMap<DatapathId, List<OFStatsReply>> model = new HashMap<DatapathId, List<OFStatsReply>>();
 	}
 	
 	/**
@@ -455,6 +421,13 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 		} else {
 			log.warn("Statistics collection thread(s) stopped");
 		}
+		if (!flowStatsCollector.cancel(false)) {
+			log.error("Could not cancel flow stats thread");
+		} else {
+			log.warn("Statistics collection thread(s) stopped");
+		}
+		
+		
 	}
 
 	/**
