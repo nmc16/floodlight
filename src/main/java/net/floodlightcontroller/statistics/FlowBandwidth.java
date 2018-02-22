@@ -1,8 +1,6 @@
 package net.floodlightcontroller.statistics;
 
 
-
-
 import org.projectfloodlight.openflow.protocol.match.Match;
 import org.projectfloodlight.openflow.types.DatapathId;
 import org.projectfloodlight.openflow.types.OFPort;

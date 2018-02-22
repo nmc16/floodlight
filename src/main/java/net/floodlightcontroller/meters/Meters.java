@@ -200,7 +200,7 @@ public class Meters implements IOFMessageListener, IFloodlightModule {
 		OFMeterMod.Builder meterModBuilder = meterFactory.buildMeterMod().setMeterId(meterID).setCommand(OFMeterModCommand.ADD);		
 		OFMeterBand.Builder meterband = meterFactory.meterBands().buildExperimenter();
 		OFMeterBand band = meterband.build();
-        bands.add(band);
+		bands.add(band);
         Set<OFMeterFlags> mflags = new HashSet<OFMeterFlags>();
         mflags.add(OFMeterFlags.KBPS) ;
 		meterModBuilder.setMeters(bands).setFlags(mflags).build();

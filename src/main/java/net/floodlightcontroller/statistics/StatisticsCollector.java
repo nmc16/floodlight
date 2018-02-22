@@ -192,10 +192,8 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 
 		@Override
 		public void run() {
+			
 			Map<DatapathId, List<OFStatsReply>> flowReplies = getSwitchStatistics(switchService.getAllSwitchDpids(), OFStatsType.FLOW);
-			if(debug) {
-				System.out.print("\033[H\033[2J");// add this to clear the command line every round only works on real terminal
-			}
 			for (Entry<DatapathId, List<OFStatsReply>> e : flowReplies.entrySet()) {
 				for (OFStatsReply r : e.getValue()) {
 
@@ -240,7 +238,7 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 									
 									
 									if(debug) {
-										System.out.println("sw: "+ sw+ " speed(bps): "+ speed  + " bytes:" + bytesCount.getValue() + " Duration (s): " +dur + " In_Port: " + in_port) ;
+										log.info("sw: "+ sw+ " speed(bps): "+ speed  + " bytes:" + bytesCount.getValue() + " Duration (s): " +dur + " In_Port: " + in_port) ;
 									}
 									
 									
@@ -265,7 +263,7 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 						}
 					}
 					if(debug) {
-						System.out.println("###########################################################################################################################################################################################");
+						log.info("###########################################################################################################################################################################################");
 					}
 				}	
 			}	
