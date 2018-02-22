@@ -16,8 +16,6 @@ import org.slf4j.LoggerFactory;
 
 /** 
  * @ServerEndpoint gives the relative name for the end point
- * This will be accessed via ws://localhost:8080/webSocketServer/echo
- * Where "localhost" is the address of the host,
  */
 
 @ServerEndpoint("/echo") 
