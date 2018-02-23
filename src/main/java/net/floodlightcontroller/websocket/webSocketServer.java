@@ -1,8 +1,7 @@
 package net.floodlightcontroller.websocket;
 
 
-import java.io.IOException;
-
+import java.io.IOException; 
 
 import javax.websocket.OnClose;
 import javax.websocket.OnError;
@@ -21,6 +20,7 @@ public class webSocketServer {
 	
 	// Class logger
 	private static final Logger logger = LoggerFactory.getLogger(webSocket.class);
+	
 	
 	/**
      * @OnOpen allows us to intercept the creation of a new session.
