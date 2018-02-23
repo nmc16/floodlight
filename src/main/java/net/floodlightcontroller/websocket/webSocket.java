@@ -113,7 +113,7 @@ public class webSocket implements IStorageSourceListener, IFloodlightModule {
 			logger.warn("begginning main");
 	        Server server = new Server();
 	        ServerConnector connector = new ServerConnector(server);
-	        connector.setPort(8080);
+	        connector.setPort(8088);
 	        server.addConnector(connector);
 
 	        // Setup the basic application "context" for this application at "/"
