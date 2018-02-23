@@ -1,10 +1,14 @@
 package net.floodlightcontroller.websocket;
 
-import java.util.Collection;  
+import java.util.Collection;   
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
+import org.eclipse.jetty.server.Server; 
+import org.eclipse.jetty.server.ServerConnector;
+import org.eclipse.jetty.servlet.ServletContextHandler;
+import org.eclipse.jetty.servlet.ServletHolder;
 import net.floodlightcontroller.core.IFloodlightProviderService;
 import net.floodlightcontroller.core.IShutdownService;
 import net.floodlightcontroller.core.internal.IOFSwitchService;
@@ -105,6 +109,35 @@ public class webSocket implements IStorageSourceListener, IFloodlightModule {
 				logger.error("Error in installing listener for "
 						+ "switch table {}");
 			}
+			
+			logger.warn("begginning main");
+	        Server server = new Server();
+	        ServerConnector connector = new ServerConnector(server);
+	        connector.setPort(8080);
+	        server.addConnector(connector);
+
+	        // Setup the basic application "context" for this application at "/"
+	        // This is also known as the handler tree (in jetty speak)
+	        ServletContextHandler contextt = new ServletContextHandler(ServletContextHandler.SESSIONS);
+	        contextt.setContextPath("/");
+	        server.setHandler(contextt);
+	        
+	        // Add a websocket to a specific path spec
+	        ServletHolder holderEvents = new ServletHolder("ws-events", EventServlet.class);
+	        contextt.addServlet(holderEvents, "/events/*");
+
+	        try
+	        {
+	            server.start();
+	            logger.warn("server is up");
+	            server.dump(System.err);
+	            server.join();
+	        }
+	        catch (Throwable t)
+	        {
+	        	logger.warn("didnt work yo");
+	            t.printStackTrace(System.err);
+	        }
 
 	}
 	
