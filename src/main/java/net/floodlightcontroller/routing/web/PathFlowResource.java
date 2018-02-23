@@ -3,20 +3,18 @@ package net.floodlightcontroller.routing.web;
 import net.floodlightcontroller.core.IOFSwitch;
 import net.floodlightcontroller.core.internal.IOFSwitchService;
 import net.floodlightcontroller.core.types.NodePortTuple;
-import net.floodlightcontroller.core.web.AllSwitchStatisticsResource;
-import net.floodlightcontroller.core.web.CoreWebRoutable;
-import net.floodlightcontroller.core.web.StatsReply;
 import net.floodlightcontroller.core.web.SwitchResourceBase;
-import net.floodlightcontroller.devicemanager.IDevice;
 import net.floodlightcontroller.devicemanager.IDeviceService;
+import net.floodlightcontroller.devicemanager.SwitchPort;
 import net.floodlightcontroller.devicemanager.internal.Device;
 import net.floodlightcontroller.linkdiscovery.ILinkDiscoveryService;
 import net.floodlightcontroller.linkdiscovery.Link;
-import net.floodlightcontroller.linkdiscovery.internal.LinkInfo;
-import net.floodlightcontroller.linkdiscovery.web.LinkWithType;
+import net.floodlightcontroller.threadpool.IThreadPoolService;
 import org.projectfloodlight.openflow.protocol.*;
 import org.projectfloodlight.openflow.protocol.action.OFAction;
 import org.projectfloodlight.openflow.protocol.action.OFActionOutput;
+import org.projectfloodlight.openflow.protocol.instruction.OFInstruction;
+import org.projectfloodlight.openflow.protocol.instruction.OFInstructionApplyActions;
 import org.projectfloodlight.openflow.protocol.match.Match;
 import org.projectfloodlight.openflow.protocol.match.MatchField;
 import org.projectfloodlight.openflow.types.*;
@@ -26,10 +24,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.*;
-import java.util.concurrent.Callable;
+import java.util.concurrent.*;
 
+/**
+ *
+ */
 public class PathFlowResource extends SwitchResourceBase {
 
+    /**
+     *
+     */
     private enum PathDirection {
         FORWARD,
         BACKWARD
@@ -37,8 +41,12 @@ public class PathFlowResource extends SwitchResourceBase {
 
     private static final Logger LOG = LoggerFactory.getLogger(PathFlowResource.class);
 
+    /**
+     *
+     * @return
+     */
     @Get("json")
-    public String[] retrieveFlowPath() {
+    public List<String> retrieveFlowPath() {
         // Get the request parameters for the request
         String dpid = (String) getRequestAttributes().get("src-dpid");
         String ethDst = (String) getRequestAttributes().get("eth-dst");
@@ -50,93 +58,51 @@ public class PathFlowResource extends SwitchResourceBase {
                                                             .getAttributes()
                                                             .get(IOFSwitchService.class.getCanonicalName());
 
-        ILinkDiscoveryService linkService = (ILinkDiscoveryService) getContext()
+        IThreadPoolService threadPoolService = (IThreadPoolService) getContext()
                                                                     .getAttributes()
-                                                                    .get(ILinkDiscoveryService.class.getCanonicalName());
-
-        IDeviceService deviceManager = (IDeviceService) getContext()
-                                                        .getAttributes()
-                                                        .get(IDeviceService.class.getCanonicalName());
-
-        List<OFStatsReply> replies = getSwitchStatistics(dpid, OFStatsType.FLOW);
-        IOFSwitch sw = switchService.getSwitch(DatapathId.of(dpid));
+                                                                    .get(IThreadPoolService.class.getCanonicalName());
 
         // Build the match object that we are going to use to find the flow route
+        IOFSwitch sw = switchService.getSwitch(DatapathId.of(dpid));
         Match match = sw.getOFFactory()
                         .buildMatch()
                         .setExact(MatchField.ETH_DST, MacAddress.of(ethDst))
                         .setExact(MatchField.ETH_SRC, MacAddress.of(ethSrc))
-                        .setExact(MatchField.ETH_TYPE, EthType.of(Integer.parseInt(ethType, 16)))
+                        .setExact(MatchField.ETH_TYPE, EthType.of(Integer.decode(ethType)))
                         .build();
 
         LOG.info("Finding matches for flow: " + match.toString());
+        FlowPathFinder forward = new FlowPathFinder(sw, match, PathDirection.FORWARD);
+        FlowPathFinder backward = new FlowPathFinder(sw, match, PathDirection.BACKWARD);
 
-        // I think there should only be one really but lets loop over it just in case
-        Match rootMatch = null;
-        List<OFAction> rootActions = null;
-        for (OFStatsReply reply : replies) {
-            // If it is not a flow stat we don't care about it
-            if (reply.getStatsType() != OFStatsType.FLOW) {
-                continue;
-            }
+        Future<List<String>> pathForward =
+                threadPoolService.getScheduledExecutor().schedule(forward, 0, TimeUnit.MICROSECONDS);
+        Future<List<String>> pathBackward =
+                threadPoolService.getScheduledExecutor().schedule(backward, 0, TimeUnit.MICROSECONDS);
 
-            // Cast to the the flow stats reply to get the matches
-            OFFlowStatsReply flowReply = (OFFlowStatsReply) reply;
+        List<String> path = new ArrayList<>();
+        try {
+            path.addAll(pathBackward.get(2, TimeUnit.SECONDS));
 
-            // Loop over all the flow entries to find the matching match
-            for (OFFlowStatsEntry entry : flowReply.getEntries()) {
-                if (match.get(MatchField.ETH_SRC).equals(entry.getMatch().get(MatchField.ETH_SRC)) &&
-                        match.get(MatchField.ETH_DST).equals(entry.getMatch().get(MatchField.ETH_DST)) &&
-                        match.get(MatchField.ETH_TYPE).equals(entry.getMatch().get(MatchField.ETH_TYPE))) {
+            // Remove the last index or else we will have two of the same switches
+            // due to the starting point always being added
+            path.remove(path.size() - 1);
 
-                    rootMatch = entry.getMatch();
-                    rootActions = entry.getActions();
-                    LOG.info("Match found: " + entry.getMatch().toString());
-                    break;
-                }
-            }
+            path.addAll(pathForward.get(2, TimeUnit.SECONDS));
+
+        } catch (InterruptedException | ExecutionException | TimeoutException e) {
+            LOG.error("Could not get path due to error: " + e.getLocalizedMessage());
+            this.setStatus(Status.SERVER_ERROR_INTERNAL);
+            return Collections.emptyList();
         }
 
-        // Ensure that we found a match otherwise return invalid request
-        if (rootMatch == null) {
-            this.setStatus(Status.CLIENT_ERROR_BAD_REQUEST);
-            LOG.error("Client requested match field was not found on switch: " + dpid);
-            return new String[0];
-        }
 
-        @SuppressWarnings("unchecked")
-        Iterator<Device> srcIterator = (Iterator<Device>) deviceManager.queryDevices(MacAddress.of(ethSrc),
-                                                                                     null,
-                                                                                     IPv4Address.NONE,
-                                                                                     IPv6Address.NONE,
-                                                                                     DatapathId.NONE,
-                                                                                     OFPort.ZERO);
-
-        if (!srcIterator.hasNext()) {
-            LOG.error("Couldn't find host with MAC address: " + ethSrc);
-            return new String[0];
-        }
-
-        List<Device> srcDevices = new ArrayList<>();
-        srcIterator.forEachRemaining(srcDevices::add);
-        LOG.error("Source Devices: " + srcDevices.toString());
-
-        // Otherwise now that we have the root match we can send threads going both ways along the flow
-        // route to find the entire route
-        NodePortTuple npt = new NodePortTuple(DatapathId.of(dpid), rootMatch.get(MatchField.IN_PORT));
-        LOG.info("NPT: " + npt.toString());
-        Map<NodePortTuple, Set<Link>> portLinks = linkService.getPortLinks();
-        //LOG.info(portLinks.toString());
-        LOG.info(portLinks.get(npt).toString());
-
-        // Find the link for us ensure that it is the only link
-        ArrayList<Link> linkSet = new ArrayList<>(portLinks.get(npt));
-        assert linkSet.size() == 1;
-        LOG.info("Found link: " + linkSet.get(0).toString());
-
-        return new String[0];
+        return path;
     }
 
+    /**
+     *
+     */
     private class PathFinderException extends Exception {
 
         public PathFinderException(String s) {
@@ -148,21 +114,29 @@ public class PathFlowResource extends SwitchResourceBase {
         }
     }
 
+    /**
+     *
+     */
     private class FlowPathFinder implements Callable<List<String>> {
 
         private PathDirection direction;
-        private IOFSwitch sw;
+        private IOFSwitch rootSwitch;
         private Match match;
-        private List<OFAction> actions;
         private ILinkDiscoveryService linkService;
         private IOFSwitchService switchService;
+        private IDeviceService deviceManager;
         private Map<NodePortTuple, Set<Link>> portLinks;
 
-        public FlowPathFinder(IOFSwitch sw, Match match, List<OFAction> actions, PathDirection direction) {
+        /**
+         *
+         * @param rootSwitch
+         * @param match
+         * @param direction
+         */
+        public FlowPathFinder(IOFSwitch rootSwitch, Match match, PathDirection direction) {
             this.direction = direction;
-            this.sw = sw;
+            this.rootSwitch = rootSwitch;
             this.match = match;
-            this.actions = actions;
 
             this.linkService = (ILinkDiscoveryService) getContext()
                                                        .getAttributes()
@@ -172,40 +146,105 @@ public class PathFlowResource extends SwitchResourceBase {
                                                     .getAttributes()
                                                     .get(IOFSwitchService.class.getCanonicalName());
 
+            this.deviceManager = (IDeviceService) getContext()
+                                                  .getAttributes()
+                                                  .get(IDeviceService.class.getCanonicalName());
+
             this.portLinks = this.linkService.getPortLinks();
         }
 
         @Override
         public List<String> call() throws Exception {
-            return (this.direction == PathDirection.FORWARD) ? findPathToSrc() : findPathToDst();
+            // Create a list to keep track of the path we found
+            List<String> path = new ArrayList<>();
+
+            // Get the root switch and add it to the list
+            IOFSwitch curSwitch = this.rootSwitch;
+            path.add(this.rootSwitch.getId().toString());
+
+            // Loop until we hit a host
+            while (curSwitch != null) {
+                LOG.info("Current path going " + this.direction.toString() + ": " + path.toString());
+
+                DatapathId next = getNextHop(curSwitch);
+                curSwitch = switchService.getSwitch(next);
+
+                // We may need to convert a DPID to a MAC address
+                String id;
+                if (curSwitch != null) {
+                    // We are looking at a switch so add the DPID
+                    id = next.toString();
+
+                } else {
+                    // We are looking at a host so convert it to a MAC address
+                    id = MacAddress.of(next).toString();
+                }
+
+                // Going backwards means we want to add to the front of the list
+                if (this.direction == PathDirection.FORWARD) {
+                    path.add(id);
+                } else {
+                    path.add(0, id);
+                }
+            }
+
+            // We must have hit our host so we can return the list
+            return path;
         }
 
-        private List<String> findPathToSrc() {
-            NodePortTuple npt = new NodePortTuple(this.sw.getId(), this.match.get(MatchField.IN_PORT));
-            //
-
-            return null;
-        }
-
-        private IOFSwitch getNextHop(IOFSwitch curSwitch) throws PathFinderException {
+        /**
+         *
+         * @param curSwitch
+         * @return
+         * @throws PathFinderException
+         */
+        private DatapathId getNextHop(IOFSwitch curSwitch) throws PathFinderException {
             return (this.direction == PathDirection.FORWARD) ?
-                    getNextHopForwards(curSwitch) : getNextHopBackwards();
+                    getNextHopForwards(curSwitch) : getNextHopBackwards(curSwitch);
         }
 
-        private IOFSwitch getNextHopBackwards() throws PathFinderException {
-            return null;
+        /**
+         *
+         * @param curSwitch
+         * @return
+         * @throws PathFinderException
+         */
+        private DatapathId getNextHopBackwards(IOFSwitch curSwitch) throws PathFinderException {
+            // Get the flow entry on the current switch
+            OFFlowStatsEntry flowEntry = getMatchingFlow(curSwitch);
+
+            NodePortTuple npt = new NodePortTuple(curSwitch.getId(), flowEntry.getMatch().get(MatchField.IN_PORT));
+            Link link = getLinkOnPort(npt);
+
+            // The link must be an access point to the destination host if it is null
+            if (link == null) {
+                return getHopToHost(curSwitch);
+            }
+
+            // Otherwise we can get the next switch ID from the link directly
+            return link.getSrc();
         }
 
-        private IOFSwitch getNextHopForwards(IOFSwitch curSwitch) throws PathFinderException {
+        /**
+         *
+         * @param curSwitch
+         * @return
+         * @throws PathFinderException
+         */
+        private DatapathId getNextHopForwards(IOFSwitch curSwitch) throws PathFinderException {
             // Get the flow entry on the current switch
             OFFlowStatsEntry flowEntry = getMatchingFlow(curSwitch);
 
             // For now we are going to assume that there is only going to be one action that we care about
             // TODO: so may have to re-visit this if the flow can go to two different switches
             OFPort outputPort = OFPort.ZERO;
-            for (OFAction action : flowEntry.getActions()) {
-                if (action.getType() == OFActionType.OUTPUT) {
-                    outputPort = ((OFActionOutput) action).getPort();
+            for (OFInstruction instruction : flowEntry.getInstructions()) {
+                if (instruction.getType() == OFInstructionType.APPLY_ACTIONS) {
+                    List<OFAction> actions = ((OFInstructionApplyActions) instruction).getActions();
+
+                    if (actions != null) {
+                        outputPort = ((OFActionOutput) actions.get(0)).getPort();
+                    }
                 }
             }
 
@@ -216,9 +255,65 @@ public class PathFlowResource extends SwitchResourceBase {
                 throw new PathFinderException(msg);
             }
 
-            return null;
+            NodePortTuple npt = new NodePortTuple(curSwitch.getId(), outputPort);
+            Link link = getLinkOnPort(npt);
+
+            // The link must be an access point to the destination host if it is null
+            if (link == null) {
+                return getHopToHost(curSwitch);
+            }
+
+            // Otherwise we can get the next switch ID from the link directly
+            return link.getDst();
         }
 
+        /**
+         *
+         * @param curSwitch
+         * @return
+         * @throws PathFinderException
+         */
+        private DatapathId getHopToHost(IOFSwitch curSwitch) throws PathFinderException {
+            MacAddress ethAddress = (this.direction == PathDirection.FORWARD) ?
+                    this.match.get(MatchField.ETH_DST) : this.match.get(MatchField.ETH_SRC);
+
+            @SuppressWarnings("unchecked")
+            Iterator<Device> iterator = (Iterator<Device>) deviceManager.queryDevices(ethAddress,
+                                                                                      null,
+                                                                                      IPv4Address.NONE,
+                                                                                      IPv6Address.NONE,
+                                                                                      DatapathId.NONE,
+                                                                                      OFPort.ZERO);
+
+            // Make sure there is at least one device in the list
+            if (!iterator.hasNext()) {
+                LOG.error("Couldn't find host with MAC address: " + ethAddress.toString());
+                throw new PathFinderException("Couldn't find host with MAC address: " + ethAddress.toString());
+            }
+
+            // We can probably safely assume that there is always going to only be one
+            Device device = iterator.next();
+            for (SwitchPort switchPort : device.getAttachmentPoints()) {
+                if (switchPort.getNodeId() == curSwitch.getId()) {
+                    // We found the connection so we can send back the final hop
+                    return DatapathId.of(device.getMACAddress());
+                }
+            }
+
+            // Otherwise we were supposed to find an attachment to the end but we didn't
+            String msg = "Couldn't find any attachment between switch " + curSwitch.getId() +
+                         " and host " + ethAddress.toString();
+
+            LOG.error(msg);
+            throw new PathFinderException(msg);
+        }
+
+        /**
+         *
+         * @param curSwitch
+         * @return
+         * @throws PathFinderException
+         */
         private OFFlowStatsEntry getMatchingFlow(IOFSwitch curSwitch) throws PathFinderException {
             // Query the switch for the flow statistics
             List<OFStatsReply> replies = getSwitchStatistics(curSwitch.getId(), OFStatsType.FLOW);
@@ -233,45 +328,50 @@ public class PathFlowResource extends SwitchResourceBase {
                 // Loop over all the flow entries to find the matching match
                 for (OFFlowStatsEntry entry : ((OFFlowStatsReply) reply).getEntries()) {
                     if (isMatch(this.match, entry.getMatch())) {
-                        LOG.info("Match found for switch (" + curSwitch.getId() + ": " + entry.getMatch().toString());
+                        LOG.info("Match found for switch (" + curSwitch.getId() + "): " + entry.getMatch().toString());
+                        LOG.info("Flow: " + entry.toString());
                         return entry;
                     }
                 }
             }
 
             // It's pretty catastrophic if we can't continue to follow the flow so
+            LOG.error("Could not find matching flow entry on switch: " + curSwitch.getId());
             throw new PathFinderException("Could not find matching flow entry on switch: " + curSwitch.getId());
 
         }
 
-        private Link getLink(NodePortTuple npt) {
-            Set<Link> links = portLinks.get(npt);
-
+        /**
+         * Gets the corresponding link that comes out of the switch port.
+         *
+         * Returns null if there were no links coming from that port. This usually means that the next link
+         * is actually an access point to a host.
+         *
+         * @param npt
+         * @return
+         * @throws PathFinderException
+         */
+        private Link getLinkOnPort(NodePortTuple npt) throws PathFinderException {
             // If the link was not found that usually means that the remaining link is external
+            Set<Link> links = portLinks.get(npt);
             if (links == null) {
-                // TODO
-
-
-
+                // Return null alert that the link is probably an access point
+                LOG.info("Found no internal link for port: " + npt.toString());
                 return null;
             }
 
             // Otherwise we have to extract the link because we may store both directions
-            Link hop = null;
             for (Link link : links) {
-                if (link.getSrc() == this.sw.getId()) {
-                    hop = link;
+                if ((link.getSrc() == npt.getNodeId() && this.direction == PathDirection.FORWARD) ||
+                        (link.getDst() == npt.getNodeId() && this.direction == PathDirection.BACKWARD)) {
+                    LOG.info("Found link on port: " + link.toString());
+                    return link;
                 }
             }
 
-            if (hop == null) {
-                // TODO
-                String msg = "Could not find next hop link from action";
-                LOG.error(msg);
-                throw new RuntimeException(msg);
-            }
-
-            return hop;
+            // If there were links but not the one we were looking for we have a problem
+            LOG.error("Could not find next hop from port: " + npt.toString());
+            throw new PathFinderException("Could not find next hop from port: " + npt.toString());
         }
 
         /**
@@ -286,56 +386,6 @@ public class PathFlowResource extends SwitchResourceBase {
             return m1.get(MatchField.ETH_SRC).equals(m2.get(MatchField.ETH_SRC)) &&
                    m1.get(MatchField.ETH_DST).equals(m2.get(MatchField.ETH_DST)) &&
                    m1.get(MatchField.ETH_TYPE).equals(m2.get(MatchField.ETH_TYPE));
-        }
-
-        private List<String> findPathToDst() {
-
-            // For now we are going to assume that there is only going to be one action that we care about
-            // TODO: so may have to re-visit this if the flow can go to two different switches
-            OFPort outputPort = OFPort.ZERO;
-            for (OFAction action : actions) {
-                if (action.getType() == OFActionType.OUTPUT) {
-                    outputPort = ((OFActionOutput) action).getPort();
-                }
-            }
-
-            // If we didn't find the output port from the action list then we can't continue
-            if (outputPort.equals(OFPort.ZERO)) {
-                // TODO
-                String msg = "Could not find the output action from switch: " + this.sw.getId().toString();
-                LOG.error(msg);
-                throw new RuntimeException(msg);
-            }
-
-            // Find the link that corresponds to the output action
-            NodePortTuple npt = new NodePortTuple(this.sw.getId(), outputPort);
-            Set<Link> links = portLinks.get(npt);
-
-            // If the link was not found that usually means that the remaining link is external
-            if (links == null) {
-                // TODO
-            } else {
-                // Otherwise we have to extract the link because we may store both directions
-                Link hop = null;
-                for (Link link : links) {
-                    if (link.getSrc() == this.sw.getId()) {
-                        hop = link;
-                    }
-                }
-
-                if (hop == null) {
-                    // TODO
-                    String msg = "Could not find next hop link from action";
-                    LOG.error(msg);
-                    throw new RuntimeException(msg);
-                }
-
-                // Have to find the next switch and next action
-                IOFSwitch iofSwitch = switchService.getSwitch(hop.getDst());
-
-            }
-
-            return null;
         }
     }
 }
