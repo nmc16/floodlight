@@ -205,6 +205,7 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 						OFPort in_port = match.get(MatchField.IN_PORT);
 						U64 bytesCount = fse.getByteCount(); //take in the number of bytes  
 						long dur = fse.getDurationSec(); //take in the duration 
+						
 						// now I need to set up the comparisons 
 						NodeFlowTuple nft = new NodeFlowTuple(sw,match) ;
 						if(flowStats.containsKey(nft)){	
@@ -217,7 +218,6 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 							
 							//Calculate the difference in time between the current and previous stat response
 							long timediff = dur - stat.getDuration();
-							
 							long speed;
 							// Avoid divide by zero error
 							if(byteDiff!=0){							
@@ -227,39 +227,30 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 							}
 							try {
 								if(!(speed < 0)) {		
+									
 									// if we have a valid flow we want to update the hash and then send the information to the GUI
-									
-									
 									FlowBandwidth test = FlowBandwidth.of(sw, match, dur, bytesCount, speed,in_port);
 									flowStats.put(nft,test);		
 									
 									//The SOCKET send to the gui should be implemented here 
-									
-									
+
 									
 									if(debug) {
 										log.info("sw: "+ sw+ " speed(bps): "+ speed  + " bytes:" + bytesCount.getValue() + " Duration (s): " +dur + " In_Port: " + in_port) ;
-									}
-									
-									
-									
+									}	
 								}else {
 									// if we are getting a negative speed a flow has restarted in the network, we do not want to 
 									// send these values or print them out so just insert them into the hash default speed to 0
 									FlowBandwidth test = FlowBandwidth.of(sw, match, dur, bytesCount, 0, in_port);
 									flowStats.put(nft,test);
-									
 								}
 							}catch(IllegalArgumentException exc) {
 								System.out.println("Bad flow bandwidth" + exc);
 							}
-
-							
 						}else {
 						
 							//if there is no existing flow stat insert with default 0 speed
-							flowStats.put(nft, FlowBandwidth.of(sw, match, dur, bytesCount, 0,in_port)); 	
-							
+							flowStats.put(nft, FlowBandwidth.of(sw, match, dur, bytesCount, 0,in_port)); 					
 						}
 					}
 					if(debug) {

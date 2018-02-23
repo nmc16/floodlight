@@ -19,10 +19,7 @@ public class NodeFlowTupleSerializer extends JsonSerializer<NodeFlowTuple> {
     }
     
     public static void serialize(NodeFlowTuple nft, JsonGenerator jGen) throws IOException {
-    
-    	
-    	//TO-DO need to update this with flow data    
-    	
+        	
     	jGen.writeStartObject();
         jGen.writeStringField("switch", nft.getNodeId().toString());
         jGen.writeStringField("match", nft.getMatch().toString());

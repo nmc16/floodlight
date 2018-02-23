@@ -142,9 +142,7 @@ public class Meters implements IOFMessageListener, IFloodlightModule {
 				List<OFInstruction> inst = pi.getInstructions();			
 				OFFlowModCommand type = pi.getCommand();
 				TableId table = pi.getTableId();
-				boolean corAdd = false; 
-				//logger.info("THe inputs :" + pi.toString());
-				
+				boolean corAdd = false; 			
 				if(type == OFFlowModCommand.ADD) {
 					EthType ethtype = testM.get(MatchField.ETH_TYPE);
 					EthType ethtest = EthType.of(0x800);						
