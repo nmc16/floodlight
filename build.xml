@@ -99,6 +99,7 @@
     	<include name="jetty-io-9.4.8.v20171121.jar"/>
     	<include name="jetty-security-9.4.8.v20171121.jar"/>
     	<include name="javax.servlet-api.jar"/>
+    	<include name="jetty-client-9.4.8.v20171121.jar"/>
     </patternset>
 
     <path id="classpath">
