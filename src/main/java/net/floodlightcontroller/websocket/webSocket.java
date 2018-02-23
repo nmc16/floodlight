@@ -37,7 +37,7 @@ public class webSocket implements IStorageSourceListener, IFloodlightModule {
 	
 	
 	protected IStorageSourceService storageSourceService;
-
+	protected IRestApiService restApiService;
 
 	private static final String TOPOLOGY_TABLE_NAME = "controller_firewallrules";
 	
@@ -48,8 +48,11 @@ public class webSocket implements IStorageSourceListener, IFloodlightModule {
 		Collection<Class<? extends IFloodlightService>> l =
 		        new ArrayList<Class<? extends IFloodlightService>>();
 		    l.add(IStorageSourceService.class);
+		    l.add(IRestApiService.class);
 		    return l;
 		    */
+		
+	
 		return null;
 	}
 
@@ -67,6 +70,7 @@ public class webSocket implements IStorageSourceListener, IFloodlightModule {
 				new ArrayList<Class<? extends IFloodlightService>>();
 	
 		l.add(IStorageSourceService.class);
+		l.add(IRestApiService.class);
 		return l;
 		
 		
@@ -80,7 +84,7 @@ public class webSocket implements IStorageSourceListener, IFloodlightModule {
 		
 	
 		storageSourceService = context.getServiceImpl(IStorageSourceService.class);
-
+		restApiService = context.getServiceImpl(IRestApiService.class);
 	
 	    logger.warn("made it to init");
 
