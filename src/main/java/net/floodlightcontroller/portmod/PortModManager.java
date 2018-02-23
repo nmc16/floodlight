@@ -1,6 +1,7 @@
 package net.floodlightcontroller.portmod;
 
 import java.util.*;
+import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -15,6 +16,7 @@ import net.floodlightcontroller.portmod.web.PortModWebRoutable;
 import net.floodlightcontroller.restserver.IRestApiService;
 import net.floodlightcontroller.storage.*;
 
+import net.floodlightcontroller.threadpool.IThreadPoolService;
 import org.projectfloodlight.openflow.protocol.*;
 import org.projectfloodlight.openflow.types.DatapathId;
 import org.projectfloodlight.openflow.types.OFPort;
@@ -48,6 +50,7 @@ public class PortModManager implements IFloodlightModule, IPortModService {
 	private IOFSwitchService switchService;
 	private IRestApiService restService;
 	private IStorageSourceService storageService;
+	private IThreadPoolService threadPoolService;
 
 	@Override
 	public Collection<Class<? extends IFloodlightService>> getModuleServices() {
@@ -88,6 +91,7 @@ public class PortModManager implements IFloodlightModule, IPortModService {
 		this.switchService = context.getServiceImpl(IOFSwitchService.class);
 		this.restService = context.getServiceImpl(IRestApiService.class);
 		this.storageService = context.getServiceImpl(IStorageSourceService.class);
+		this.threadPoolService = context.getServiceImpl(IThreadPoolService.class);
 	}
 
 	@Override
@@ -102,6 +106,15 @@ public class PortModManager implements IFloodlightModule, IPortModService {
 		// Tell the world we have loaded
 		LOG.info("Loaded module: Port modifications");
 	}
+
+	@Override
+    public Future<OFPortMod> createPortModAsync(DatapathId dpid, OFPort port, OFPortConfig config, boolean enable) {
+        // Create the callable we will submit to the thread executor
+        PortModCallable callable = new PortModCallable(this, dpid, port, config, enable);
+
+        // Submit to the executor and return the result
+        return this.threadPoolService.getScheduledExecutor().schedule(callable, 0, TimeUnit.MICROSECONDS);
+    }
 
 	@Override
     public OFPortMod createPortMod(DatapathId dpid, OFPort port, OFPortConfig config, boolean enable)
@@ -291,5 +304,33 @@ public class PortModManager implements IFloodlightModule, IPortModService {
         }
 
         return enabledConfigs;
+    }
+
+    /**
+     * Callable implementation for the asynchronous calls to create port modifications.
+     *
+     * @see PortModManager#createPortModAsync(DatapathId, OFPort, OFPortConfig, boolean)
+     */
+    private class PortModCallable implements Callable<OFPortMod> {
+
+        private IPortModService portModService;
+        private DatapathId dpid;
+        private OFPort port;
+        private OFPortConfig config;
+        private boolean enable;
+
+        public PortModCallable(IPortModService portModService, DatapathId dpid, OFPort port,
+                               OFPortConfig config, boolean enable) {
+            this.portModService = portModService;
+            this.dpid = dpid;
+            this.port = port;
+            this.config = config;
+            this.enable = enable;
+        }
+
+        @Override
+        public OFPortMod call() throws Exception {
+            return this.portModService.createPortMod(this.dpid, this.port, this.config, this.enable);
+        }
     }
 }

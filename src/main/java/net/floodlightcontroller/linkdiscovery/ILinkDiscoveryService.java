@@ -132,20 +132,4 @@ public interface ILinkDiscoveryService extends IFloodlightService {
      *        ALL packet ins.
      */
     public void addMACToIgnoreList(MacAddress mac, int ignoreBits);
-
-    /**
-     * Sets the link state either up or down. If the link is set down, the ports on either end will be
-     * set to drop traffic.
-     *
-     * @param link Link to change the state of
-     * @param state State to set on the link
-     */
-    //public void changeLinkState(Link link, ILinkDiscovery.LinkState state);
-
-    /**
-     * Returns the links that have been set down by users. Link default states are set up.
-     *
-     *
-     */
-    //public List<Link> getDownLinks();
 }

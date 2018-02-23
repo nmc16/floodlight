@@ -10,6 +10,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Future;
 
 /**
  * Service that provides utilities to apply port modifications on switches and to retrieve the current
@@ -31,6 +32,21 @@ public interface IPortModService extends IFloodlightService {
      * @throws PortModException There was an error applying the port modification
      */
     OFPortMod createPortMod(DatapathId dpid, OFPort port, OFPortConfig config, boolean enable) throws PortModException;
+
+    /**
+     * Applies the port modification asynchronously.
+     *
+     * Instead of waiting for response from the switch the method returns a future object and leaves it up to
+     * the user to determine if the port modification was successful.
+     *
+     * @see Future
+     * @param dpid Data path ID of the switch the port belongs to
+     * @param port Port to apply the modification to
+     * @param config Modification type (i.e. port down, no receive, etc.)
+     * @param enable Flag to enable or disable the modification
+     * @return Future object for the port modification
+     */
+    Future<OFPortMod> createPortModAsync(DatapathId dpid, OFPort port, OFPortConfig config, boolean enable);
 
     /**
      * Applies a set of port configurations on a port on the switch via a port modification message.

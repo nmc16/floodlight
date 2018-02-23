@@ -16,6 +16,7 @@ def emptyNet():
     info( '*** Adding hosts\n' )
     h1 = net.addHost( 'h1' )
     h2 = net.addHost( 'h2' )
+    h3 = net.addHost( 'h3' )
 
     info( '*** Adding switch\n' )
     s1 = net.addSwitch( 's1', cls=OVSSwitch )
@@ -25,11 +26,12 @@ def emptyNet():
 
     info( '*** Creating links\n' )
     ## controller - switch (s4)
-    net.addLink( h0, s4 )
+    net.addLink( h0, s3 )
 
     ## host - switch
     net.addLink( h1, s1 )
-    net.addLink( h2, s3 )
+    net.addLink( h2, s2 )
+    net.addLink( h3, s4 )
 
     ## switches
     switchList = (s1, s2, s3, s4)

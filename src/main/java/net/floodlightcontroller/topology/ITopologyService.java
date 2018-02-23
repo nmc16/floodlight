@@ -253,4 +253,30 @@ public interface ITopologyService extends IFloodlightService  {
      * @return
      */
     public Set<Link> getInternalInterClusterLinks();
+
+    /**
+     * Blocks the link from the topology.
+     *
+     * Warning: Blocking a link relies on recomputation of topologies. This may take time,
+     *          meaning traffic will be lost.
+     *
+     * @param link Link to block from the topology
+     * @return True if the link was successfully blocked, false otherwise
+     */
+    boolean blockLink(Link link);
+
+    /**
+     * Unblocks the link from the topology.
+     *
+     * @param link Link to unblock
+     * @return True if the link was successfully unblocked, false otherwise
+     */
+    boolean unblockLink(Link link);
+
+    /**
+     * Returns the list of blocked links.
+     *
+     * @return Set of blocked links
+     */
+    Set<Link> getBlockedLinks();
 }
