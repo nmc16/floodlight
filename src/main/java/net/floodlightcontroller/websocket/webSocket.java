@@ -1,6 +1,6 @@
 package net.floodlightcontroller.websocket;
 
-import java.util.Collection;   
+import java.util.Collection;    
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -9,6 +9,8 @@ import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
+import org.eclipse.jetty.websocket.api.Session;
+
 import net.floodlightcontroller.core.IFloodlightProviderService;
 import net.floodlightcontroller.core.IShutdownService;
 import net.floodlightcontroller.core.internal.IOFSwitchService;
@@ -32,6 +34,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.Future;
 
 
 public class webSocket implements IStorageSourceListener, IFloodlightModule {
@@ -113,7 +116,7 @@ public class webSocket implements IStorageSourceListener, IFloodlightModule {
 			logger.warn("begginning main");
 	        Server server = new Server();
 	        ServerConnector connector = new ServerConnector(server);
-	        connector.setPort(8088);
+	        connector.setPort(8111);
 	        server.addConnector(connector);
 
 	        // Setup the basic application "context" for this application at "/"
@@ -125,19 +128,23 @@ public class webSocket implements IStorageSourceListener, IFloodlightModule {
 	        // Add a websocket to a specific path spec
 	        ServletHolder holderEvents = new ServletHolder("ws-events", EventServlet.class);
 	        contextt.addServlet(holderEvents, "/events/*");
-
+	       
+	        	
 	        try
 	        {
 	            server.start();
 	            logger.warn("server is up");
-	            server.dump(System.err);
-	            server.join();
+	            //server.dump(System.err);
+	            //server.join();
+	            //logger.warn("server joined");
+	            
 	        }
 	        catch (Throwable t)
 	        {
 	        	logger.warn("didnt work yo");
 	            t.printStackTrace(System.err);
 	        }
+	        
 
 	}
 	
