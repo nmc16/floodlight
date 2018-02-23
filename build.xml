@@ -93,6 +93,8 @@
     	<include name="websocket-servlet-9.4.8.v20171121.jar"/>
     	<include name="jetty-servlet-9.4.8.v20171121.jar"/>
      	<include name="jetty-server-9.4.8.v20171121.jar"/>
+    	<include name="jetty-util-9.4.8.v20171121.jar"/>
+    	<include name="servlet-api-2.5.jar"/>
     </patternset>
 
     <path id="classpath">
