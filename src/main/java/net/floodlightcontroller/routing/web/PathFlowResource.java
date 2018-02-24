@@ -27,12 +27,14 @@ import java.util.*;
 import java.util.concurrent.*;
 
 /**
+ * REST module that parses through switches to find the route of a given flow.
  *
+ * @author nicolas.mccallum@carleton.ca
  */
 public class PathFlowResource extends SwitchResourceBase {
 
     /**
-     *
+     * Enum that defines the direction the path finder should take from the source switch
      */
     private enum PathDirection {
         FORWARD,
@@ -42,8 +44,19 @@ public class PathFlowResource extends SwitchResourceBase {
     private static final Logger LOG = LoggerFactory.getLogger(PathFlowResource.class);
 
     /**
+     * Queries the source switch for its flows. Traces the flow to the destination MAC and source MAC to define a
+     * route. Expects the following URL:
+     *     http://127.0.0.1:8080/wm/routing/path/flow/{src-dpid}/{eth-src}/{eth-dst}/{eth-type}/json
      *
-     * @return
+     * Where src-dpid is the DPID of the switch that the flow exists on. Eth-src is the MAC of the source host and
+     * eth-dst is the MAC of the destination host. Eth-type is the ethernet type of the flow. Expects a GET request.
+     *
+     * The returned JSON will have the following format:
+     *     [node1, node2, ..., noden]
+     *
+     * The request will set the HTTP return based on the success or fail of the request.
+     *
+     * @return Returns the JSON response with the format above
      */
     @Get("json")
     public List<String> retrieveFlowPath() {
@@ -96,26 +109,26 @@ public class PathFlowResource extends SwitchResourceBase {
             return Collections.emptyList();
         }
 
-
         return path;
     }
 
     /**
-     *
+     * Used to indicate failures when attempting to find a route for a flow.
      */
     private class PathFinderException extends Exception {
 
-        public PathFinderException(String s) {
+        PathFinderException(String s) {
             super(s);
-        }
-
-        public PathFinderException(String s, Throwable throwable) {
-            super(s, throwable);
         }
     }
 
     /**
+     * Callable implementation that parses half of the flow's route. Either goes towards the source
+     * or the destination host from the root switch.
      *
+     * If going towards the destination it looks at the flow actions and follows them until it reaches the
+     * destination host. If it goes towards the source it looks at the source of the match until it reaches
+     * the source host.
      */
     private class FlowPathFinder implements Callable<List<String>> {
 
@@ -128,12 +141,13 @@ public class PathFlowResource extends SwitchResourceBase {
         private Map<NodePortTuple, Set<Link>> portLinks;
 
         /**
+         * Constructor.
          *
-         * @param rootSwitch
-         * @param match
-         * @param direction
+         * @param rootSwitch The original switch that the flow should be routed from
+         * @param match The match we are looking for (should define ethernet destination, source, and type)
+         * @param direction Forward is towards the destination, backwards is towards the source
          */
-        public FlowPathFinder(IOFSwitch rootSwitch, Match match, PathDirection direction) {
+        FlowPathFinder(IOFSwitch rootSwitch, Match match, PathDirection direction) {
             this.direction = direction;
             this.rootSwitch = rootSwitch;
             this.match = match;
@@ -193,10 +207,12 @@ public class PathFlowResource extends SwitchResourceBase {
         }
 
         /**
+         * Gets the next host or switch's DPID. If it is a host, the DPID is convertable
+         * to a MacAddress.
          *
-         * @param curSwitch
-         * @return
-         * @throws PathFinderException
+         * @param curSwitch The current switch to get the next hop from
+         * @return The next host or switch DPID
+         * @throws PathFinderException If there was an error retrieving the next hop
          */
         private DatapathId getNextHop(IOFSwitch curSwitch) throws PathFinderException {
             return (this.direction == PathDirection.FORWARD) ?
@@ -204,10 +220,13 @@ public class PathFlowResource extends SwitchResourceBase {
         }
 
         /**
+         * Looks at the match field from the flow entry to get the port the flow goes into. Using
+         * the port it finds the corresponding link from the switch and checks the source of the link
+         * which will be the next hop.
          *
-         * @param curSwitch
-         * @return
-         * @throws PathFinderException
+         * @param curSwitch Current switch to find the next hop from
+         * @return The next switch or host DPID
+         * @throws PathFinderException There was an error retrieving the previous node
          */
         private DatapathId getNextHopBackwards(IOFSwitch curSwitch) throws PathFinderException {
             // Get the flow entry on the current switch
@@ -226,17 +245,21 @@ public class PathFlowResource extends SwitchResourceBase {
         }
 
         /**
+         * Looks at the match field from the flow and finds the output port. Using the port, finds
+         * the outgoing link and uses the destination as the next hop.
          *
-         * @param curSwitch
-         * @return
-         * @throws PathFinderException
+         * TODO: Have to re-visit this if the flow can go to two different switches
+         *
+         * @param curSwitch Current switch to find the next hop from
+         * @return The next switch or host DPID
+         * @throws PathFinderException There was an error retrieving the next node
          */
         private DatapathId getNextHopForwards(IOFSwitch curSwitch) throws PathFinderException {
             // Get the flow entry on the current switch
             OFFlowStatsEntry flowEntry = getMatchingFlow(curSwitch);
 
             // For now we are going to assume that there is only going to be one action that we care about
-            // TODO: so may have to re-visit this if the flow can go to two different switches
+            // TODO: may have to re-visit this if the flow can go to two different switches
             OFPort outputPort = OFPort.ZERO;
             for (OFInstruction instruction : flowEntry.getInstructions()) {
                 if (instruction.getType() == OFInstructionType.APPLY_ACTIONS) {
@@ -268,10 +291,13 @@ public class PathFlowResource extends SwitchResourceBase {
         }
 
         /**
+         * Based on the direction, attempts to find a link that connects the current switch to the
+         * MAC of the source or the MAC of the destination. If a link is found, it will return the
+         * DPID corresponding to the MAC of the host that the switch is connected to.
          *
-         * @param curSwitch
-         * @return
-         * @throws PathFinderException
+         * @param curSwitch Current switch to find an external connection to a host
+         * @return DPID corresponding to the MAC of the host the switch is connected to
+         * @throws PathFinderException Couldn't find a host connection to the switch
          */
         private DatapathId getHopToHost(IOFSwitch curSwitch) throws PathFinderException {
             MacAddress ethAddress = (this.direction == PathDirection.FORWARD) ?
@@ -309,10 +335,11 @@ public class PathFlowResource extends SwitchResourceBase {
         }
 
         /**
+         * Retrieves the flow entry from the switch that matches the match fields provided.
          *
-         * @param curSwitch
-         * @return
-         * @throws PathFinderException
+         * @param curSwitch Switch to find the flow entry on
+         * @return Flow entry that matches the match fields
+         * @throws PathFinderException Could not find any flows that match the match fields
          */
         private OFFlowStatsEntry getMatchingFlow(IOFSwitch curSwitch) throws PathFinderException {
             // Query the switch for the flow statistics
@@ -345,11 +372,11 @@ public class PathFlowResource extends SwitchResourceBase {
          * Gets the corresponding link that comes out of the switch port.
          *
          * Returns null if there were no links coming from that port. This usually means that the next link
-         * is actually an access point to a host.
+         * is actually an attachment point to a host.
          *
-         * @param npt
-         * @return
-         * @throws PathFinderException
+         * @param npt Switch port to find the link from
+         * @return Link that is attached to the switch port
+         * @throws PathFinderException Could not find any links on the switch port
          */
         private Link getLinkOnPort(NodePortTuple npt) throws PathFinderException {
             // If the link was not found that usually means that the remaining link is external
@@ -378,9 +405,9 @@ public class PathFlowResource extends SwitchResourceBase {
          * Special equals implementation because realistically MACs are good enough identifiers without
          * requiring the user to provide IPs as well.
          *
-         * @param m1
-         * @param m2
-         * @return
+         * @param m1 Original match
+         * @param m2 Flow entry match
+         * @return True if equivalent, false otherwise
          */
         private boolean isMatch(Match m1, Match m2) {
             return m1.get(MatchField.ETH_SRC).equals(m2.get(MatchField.ETH_SRC)) &&
