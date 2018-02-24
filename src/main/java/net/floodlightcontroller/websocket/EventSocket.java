@@ -13,14 +13,14 @@ public class EventSocket extends WebSocketAdapter
         super.onWebSocketConnect(sess);
         System.out.println("Socket Connected: " + sess);
        
-       /*
+        
         try {
 			sess.getRemote().sendString("HEYA muthafucka");
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-		*/
+		
 		
         
     }
