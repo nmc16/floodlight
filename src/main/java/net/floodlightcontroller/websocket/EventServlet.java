@@ -10,5 +10,6 @@ public class EventServlet extends WebSocketServlet
     public void configure(WebSocketServletFactory factory)
     {
         factory.register(EventSocket.class);
+        
     }
 }

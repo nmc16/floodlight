@@ -1,7 +1,9 @@
 package net.floodlightcontroller.websocket;
 
+import java.io.IOException; 
 import java.util.Collection;    
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -42,12 +44,31 @@ public class webSocket implements IStorageSourceListener, IFloodlightModule {
 	// Class logger
 	private static final Logger logger = LoggerFactory.getLogger(webSocket.class);
 	
-	
+	private static webSocket instance;
 	protected IStorageSourceService storageSourceService;
 	protected IRestApiService restApiService;
-
-	private static final String TOPOLOGY_TABLE_NAME = "controller_firewallrules";
+	//public sessionListener activeSessions = sessionListener.getInstance();
 	
+	private static final String TOPOLOGY_TABLE_NAME = "controller_firewallrules";
+
+   
+    /**
+     * The Static initializer constructs the instance at class
+     * loading time; this is to simulate a more involved
+     * construction process (it it were really simple, you'd just
+     * use an initializer)
+     */
+	/*
+    static {
+        instance = new webSocket();
+    }
+    */
+
+    /** Static 'instance' method */
+    public static webSocket getInstance() {
+        return instance;
+    }
+
 	@Override
 	public Collection<Class<? extends IFloodlightService>> getModuleServices() {
 		
@@ -79,10 +100,7 @@ public class webSocket implements IStorageSourceListener, IFloodlightModule {
 		l.add(IStorageSourceService.class);
 		l.add(IRestApiService.class);
 		return l;
-		
-		
-		
-		
+			
 		
 	}
 
@@ -92,6 +110,7 @@ public class webSocket implements IStorageSourceListener, IFloodlightModule {
 	
 		storageSourceService = context.getServiceImpl(IStorageSourceService.class);
 		restApiService = context.getServiceImpl(IRestApiService.class);
+		
 	
 	    logger.warn("made it to init");
 
@@ -101,12 +120,13 @@ public class webSocket implements IStorageSourceListener, IFloodlightModule {
 	public void startUp(FloodlightModuleContext context) throws FloodlightModuleException {
 		
 		
-		
+		instance = this;
 		logger.info("made it before startup");
 		// Register for storage updates for the switch table
 			try {
 			
 				storageSourceService.addListener(TOPOLOGY_TABLE_NAME, this);
+				
 				logger.info("inside startup");
 			} catch (StorageException ex) {
 				logger.error("Error in installing listener for "
@@ -118,6 +138,7 @@ public class webSocket implements IStorageSourceListener, IFloodlightModule {
 	        ServerConnector connector = new ServerConnector(server);
 	        connector.setPort(8111);
 	        server.addConnector(connector);
+	        
 
 	        // Setup the basic application "context" for this application at "/"
 	        // This is also known as the handler tree (in jetty speak)
@@ -129,14 +150,16 @@ public class webSocket implements IStorageSourceListener, IFloodlightModule {
 	        ServletHolder holderEvents = new ServletHolder("ws-events", EventServlet.class);
 	        contextt.addServlet(holderEvents, "/events/*");
 	       
-	        	
 	        try
 	        {
 	            server.start();
 	            logger.warn("server is up");
+	            
+	            
 	            //server.dump(System.err);
 	            //server.join();
 	            //logger.warn("server joined");
+	            
 	            
 	        }
 	        catch (Throwable t)
@@ -144,6 +167,7 @@ public class webSocket implements IStorageSourceListener, IFloodlightModule {
 	        	logger.warn("didnt work yo");
 	            t.printStackTrace(System.err);
 	        }
+	        
 	        
 
 	}
@@ -170,6 +194,19 @@ public class webSocket implements IStorageSourceListener, IFloodlightModule {
 		return storageSourceService;
 	}
 	
+	
+	
+	/*
+	private List<Session> sessions = new ArrayList<Session>();	
+	public void tablesToListen(String tables){
+		List<String> tableNames = new ArrayList<String>();
+	}
+	*/
+	
+	
+	
+	
+	
 	@Override
 	public void rowsModified(String tableName, Set<Object> rowKeys) {
 		
@@ -188,18 +225,39 @@ public class webSocket implements IStorageSourceListener, IFloodlightModule {
 			logger.info("rows deleted1");
 			return;
 		}
-
 		 logger.info("rows deleted2");
-
 	}
 	
 	protected void readTopologyConfigFromStorage() {
 		IResultSet topologyResult = storageSourceService.executeQuery(TOPOLOGY_TABLE_NAME,
 				null, null,
 				null);
-		logger.warn("read topology");
+		logger.info("number of sessions: " + getActiveSession().size());
 		
-
+		
+		Session sess = getActiveSession().get(0);
+		try {
+			sess.getRemote().sendString("Yo the table was changed eh");
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
 	}
-
+	
+	 private List<Session> sessions = new ArrayList<Session>();	
+		public void addActiveSession(Session session)
+	    {
+	        this.sessions.add(session);
+	        logger.warn("Session added aayyyyyyy");
+	    }
+		public void removeActiveSession(Session session)
+	    {
+	        this.sessions.remove(session);
+	        logger.warn("Session removed");
+	    }
+		public List<Session> getActiveSession()
+	    {
+	        return this.sessions;
+	    }
 }
