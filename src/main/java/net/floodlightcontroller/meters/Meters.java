@@ -162,14 +162,12 @@ public class Meters implements IOFMessageListener, IFloodlightModule {
 						factoryFlag =1;
 					}
 					
-					
 					// check that the Ethernet type add type are correct before trying to add the meter 					
 					if(ethtype == ethtest && corAdd && myflag == 1 && factoryFlag ==1) {	
 						pi.getTableId();
 						try { 
 							addMeter(testM,meterIdCounter,sw,inst, table);
 						} catch (InterruptedException e) {
-							//logger.info("We had a problem :" + pi.toString());
 							e.printStackTrace();
 						}
 						meterIdCounter ++;
