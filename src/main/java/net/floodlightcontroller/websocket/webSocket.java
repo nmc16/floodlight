@@ -47,6 +47,7 @@ public class webSocket implements IStorageSourceListener, IFloodlightModule {
 	private static webSocket instance;
 	protected IStorageSourceService storageSourceService;
 	protected IRestApiService restApiService;
+	private HashMap<Session, List<String>> activeTables= new HashMap<Session, List<String>>();
 	//public sessionListener activeSessions = sessionListener.getInstance();
 	
 	//private static final String TOPOLOGY_TABLE_NAME = "controller_firewallrules";
@@ -115,30 +116,19 @@ public class webSocket implements IStorageSourceListener, IFloodlightModule {
 		instance = this;
 		logger.info("made it before startup");
 		
-		/*
-			// Register for storage updates for the switch table
-			try {
-			
-				storageSourceService.addListener(TOPOLOGY_TABLE_NAME, this);
-				
-				logger.info("inside startup");
-			} catch (StorageException ex) {
-				logger.error("Error in installing listener for "
-						+ "switch table {}");
-			}
-			*/
-			logger.warn("begginning main");
-	        Server server = new Server();
-	        ServerConnector connector = new ServerConnector(server);
-	        connector.setPort(8111);
-	        server.addConnector(connector);
-	        
+		logger.warn("begginning main");
+		Server server = new Server();
+		ServerConnector connector = new ServerConnector(server);
+		connector.setPort(8111);
+		server.addConnector(connector);
+	     
 
-	        // Setup the basic application "context" for this application at "/"
-	        // This is also known as the handler tree (in jetty speak)
-	        ServletContextHandler contextt = new ServletContextHandler(ServletContextHandler.SESSIONS);
-	        contextt.setContextPath("/");
-	        server.setHandler(contextt);
+		// Setup the basic application "context" for this application at "/"
+
+		ServletContextHandler contextt = new ServletContextHandler(ServletContextHandler.SESSIONS);
+
+		contextt.setContextPath("/");
+		server.setHandler(contextt);
 	        
 	        // Add a websocket to a specific path spec
 	        ServletHolder holderEvents = new ServletHolder("ws-events", EventServlet.class);
@@ -160,20 +150,31 @@ public class webSocket implements IStorageSourceListener, IFloodlightModule {
 	        }
 	}
 	
+
 	// Register for storage updates for the switch table
-	public void registerTable(String tableName){
+	public HashMap<Session, List<String>> registerTable(Session session, String tableName){
+		
 		try {
+		List<String> tableNames = new ArrayList<String>();
 		storageSourceService.addListener(tableName, this);
+		logger.info("Added listener: "+ tableName);
+	
+		if(activeTables.containsKey(session)){
+			tableNames = activeTables.get(session);
+			tableNames.add(tableName);
+			activeTables.put(session, tableNames);
+		}else{
+			tableNames.add(tableName);
+			activeTables.put(session, tableNames);
+		}
+		
 		} catch (StorageException ex) {
 			logger.error("Error in installing listener for "
 					+ "switch table {}");
 		}
+		return activeTables;
 	}
 	
-	// unregister tables
-	public void unregisterTable(String tableName){
-		storageSourceService.removeListener(tableName, this);
-	}
 	
 	//*********************
 	//   Storage Listener
@@ -222,7 +223,7 @@ public class webSocket implements IStorageSourceListener, IFloodlightModule {
 	protected void readTopologyConfigFromStorage(String tableName) {
 		IResultSet topologyResult = storageSourceService.executeQuery(tableName, null, null, null);
 		logger.info("number of sessions: " + getActiveSession().size());
-
+		
 		Session sess = getActiveSession().get(0);
 		try {
 			sess.getRemote().sendString("Yo the table was changed eh");
@@ -232,7 +233,7 @@ public class webSocket implements IStorageSourceListener, IFloodlightModule {
 		}
 	}
 	
-	 private List<Session> sessions = new ArrayList<Session>();	
+	private List<Session> sessions = new ArrayList<Session>();	
 		public void addActiveSession(Session session)
 	    {
 	        this.sessions.add(session);
@@ -240,6 +241,16 @@ public class webSocket implements IStorageSourceListener, IFloodlightModule {
 	    }
 		public void removeActiveSession(Session session)
 	    {
+			logger.warn("removing listeners for: "+activeTables.get(session));
+			if(activeTables.containsKey(session)){
+				List<String> tablesToRemove = activeTables.get(session);
+				for(String table : tablesToRemove){
+					storageSourceService.removeListener(table, this);
+					logger.warn("removed: " + table);
+				}
+			}
+							
+			activeTables.remove(session);
 	        this.sessions.remove(session);
 	        logger.warn("Session removed");
 	    }
