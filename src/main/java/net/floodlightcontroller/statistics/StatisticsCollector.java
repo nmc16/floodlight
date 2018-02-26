@@ -8,14 +8,24 @@ import net.floodlightcontroller.core.module.FloodlightModuleContext;
 import net.floodlightcontroller.core.module.FloodlightModuleException;
 import net.floodlightcontroller.core.module.IFloodlightModule;
 import net.floodlightcontroller.core.module.IFloodlightService;
+import net.floodlightcontroller.core.types.NodeFlowTuple;
 import net.floodlightcontroller.core.types.NodePortTuple;
 import net.floodlightcontroller.restserver.IRestApiService;
 import net.floodlightcontroller.statistics.web.SwitchStatisticsWebRoutable;
+import net.floodlightcontroller.storage.CompoundPredicate;
+import net.floodlightcontroller.storage.IResultSet;
+import net.floodlightcontroller.storage.IStorageSourceService;
+import net.floodlightcontroller.storage.OperatorPredicate;
 import net.floodlightcontroller.threadpool.IThreadPoolService;
 import org.projectfloodlight.openflow.protocol.*;
 import org.projectfloodlight.openflow.protocol.match.Match;
+import org.projectfloodlight.openflow.protocol.match.MatchField;
 import org.projectfloodlight.openflow.protocol.ver13.OFMeterSerializerVer13;
 import org.projectfloodlight.openflow.types.DatapathId;
+import org.projectfloodlight.openflow.types.EthType;
+import org.projectfloodlight.openflow.types.IPv4Address;
+import org.projectfloodlight.openflow.types.MacAddress;
+import org.projectfloodlight.openflow.types.OFGroup;
 import org.projectfloodlight.openflow.types.OFPort;
 import org.projectfloodlight.openflow.types.TableId;
 import org.projectfloodlight.openflow.types.U64;
@@ -23,6 +33,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.Thread.State;
+import java.sql.ResultSet;
 import java.util.*;
 import java.util.Map.Entry;
 import java.util.concurrent.ScheduledFuture;
@@ -34,20 +45,51 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 	private static IOFSwitchService switchService;
 	private static IThreadPoolService threadPoolService;
 	private static IRestApiService restApiService;
+	private static IStorageSourceService storageService;
 
 	private static boolean isEnabled = false;
+	private static boolean debug = true;
 	
-	private static int portStatsInterval = 10; /* could be set by REST API, so not final */
+	private static int portStatsInterval = 2; /* could be set by REST API, so not final */
+	private static int flowStatsInterval = 2; 
 	private static ScheduledFuture<?> portStatsCollector;
+	private static ScheduledFuture<?> flowStatsCollector;
 
 	private static final long BITS_PER_BYTE = 8;
 	private static final long MILLIS_PER_SEC = 1000;
 	
 	private static final String INTERVAL_PORT_STATS_STR = "collectionIntervalPortStatsSeconds";
 	private static final String ENABLED_STR = "enable";
-
+	
 	private static final HashMap<NodePortTuple, SwitchPortBandwidth> portStats = new HashMap<NodePortTuple, SwitchPortBandwidth>();
+	
+	private static final HashMap<NodeFlowTuple, FlowBandwidth> flowStats = new HashMap<NodeFlowTuple, FlowBandwidth>();
+	
 	private static final HashMap<NodePortTuple, SwitchPortBandwidth> tentativePortStats = new HashMap<NodePortTuple, SwitchPortBandwidth>();
+	
+	
+	//variables for creating/updating the tables 
+	
+	
+	private static final String TABLE_NAME = "FlowStatistics";
+	private static final String NFT = "nft";
+    private static final String DPID = "dpid";
+    private static final String ETHSRC = "ethsrc";
+    private static final String ETHDST = "ethdst";
+    private static final String ETHTYPE = "ethtype";
+    private static final String DURATION = "duration";
+    private static final String BYTECOUNT = "bytecount";
+    private static final String SPEED = "speed";
+    private static final String INPORT = "port";
+    
+    private static final String COLUMNS[] = {DPID, ETHSRC, ETHDST, ETHTYPE, DURATION, BYTECOUNT, SPEED, INPORT};
+
+    private static final long REQUEST_TIMEOUT_MSEC = 1000;
+    
+
+  	
+	
+	
 
 	/**
 	 * Run periodically to collect all port statistics. This only collects
@@ -118,7 +160,7 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 							
 						} else { /* initialize */
 							tentativePortStats.put(npt, SwitchPortBandwidth.of(npt.getNodeId(), npt.getPortId(), U64.ZERO, U64.ZERO, U64.ZERO, pse.getRxBytes(), pse.getTxBytes()));
-						}
+						}//
 					}
 				}
 			}
@@ -159,6 +201,127 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 
 			return speed;
 
+		}
+
+	}
+	
+	
+	/*
+	 * 	Added by Charlie Hardwick-Kelly Carleton University 
+	 * 	The purpose of this class is to track per flow metrics from within the network  
+	 * 	one key advantage of the flow metrics is that they contain a duration time stamp 
+	 * 	this eliminates the error involved from the control plane and allows us to compute the bandwidth of 
+	 * 	a particular flow with greater accuracy
+	 * 
+	 *  	Steps 
+	 * 		1. issue a meter stats request to all switches in parallel 
+	 * 		2. Analyze the variables 
+	 * 		3. if valid calculate relevant bandwidth 
+	 * 		4. store information in hash 
+	 * 		5. send information to the gui.
+	 * 
+	 */
+	protected class FlowStatsCollector implements Runnable {
+
+		@Override
+		public void run() {
+			
+			Map<DatapathId, List<OFStatsReply>> flowReplies = getSwitchStatistics(switchService.getAllSwitchDpids(), OFStatsType.FLOW);
+			for (Entry<DatapathId, List<OFStatsReply>> e : flowReplies.entrySet()) {
+				for (OFStatsReply r : e.getValue()) {
+
+					OFFlowStatsReply fsr = (OFFlowStatsReply) r; 
+					for ( OFFlowStatsEntry fse : fsr.getEntries()) {
+						//extract the necessary information from the existing stats and 
+						DatapathId sw = e.getKey();
+						Match match = fse.getMatch(); 						
+						OFPort in_port = match.get(MatchField.IN_PORT);
+						U64 bytesCount = fse.getByteCount(); //take in the number of bytes  
+						long dur = fse.getDurationSec(); //take in the duration 
+						
+							
+						
+						//PUll all the necessary information from new stat
+
+						MacAddress eth_src = match.get(MatchField.ETH_SRC);
+						MacAddress eth_dst = match.get(MatchField.ETH_DST);
+						EthType eth_type = match.get(MatchField.ETH_TYPE);
+
+						
+						 
+						
+						
+						
+						
+						
+						
+						// now I need to set up the comparisons 
+						NodeFlowTuple nft = new NodeFlowTuple(sw,match) ;
+						if(flowStats.containsKey(nft)){	
+							//Retrieve the previous stat response information from the hash
+							FlowBandwidth stat = flowStats.get(nft);
+							
+							//Calculate the bytes difference between current and previous collections
+							// convert from bytes to bits 
+							long byteDiff = (bytesCount.getValue() - stat.getBytes().getValue())*BITS_PER_BYTE;
+							
+							//Calculate the difference in time between the current and previous stat response
+							long timediff = dur - stat.getDuration();
+							long speed;
+							// Avoid divide by zero error
+							if(byteDiff!=0){							
+								speed= byteDiff/timediff;
+							}else {
+								speed= 0;
+							}
+							try {
+								if(!(speed < 0)) {		
+									
+									// if we have a valid flow we want to update the hash and then send the information to the GUI
+									FlowBandwidth test = FlowBandwidth.of(sw, match, dur, bytesCount, speed,in_port);
+									flowStats.put(nft,test);		
+									
+									//The SOCKET send to the gui should be implemented here 
+
+									if(debug) {
+										log.info("sw: "+ sw+ " speed(bps): "+ speed  + " bytes:" + bytesCount.getValue() + " Duration (s): " +dur + " In_Port: " + in_port) ;
+									}	
+									
+									 //Build the new row to go into the table with everything except speed
+									 Map<String, Object> newRow = new HashMap<>();
+									 newRow.put(DPID, sw);
+									 newRow.put(ETHSRC, eth_src);
+									 newRow.put(ETHDST, eth_dst);
+									 newRow.put(ETHTYPE, eth_type);
+									 newRow.put(DURATION, dur);
+									 newRow.put(BYTECOUNT, bytesCount);
+									 newRow.put(INPORT, in_port);
+									 newRow.put(SPEED, speed);
+									 storageService.insertRow(TABLE_NAME, newRow);
+									
+									
+									
+								}else {
+									// if we are getting a negative speed a flow has restarted in the network, we do not want to 
+									// send these values or print them out so just insert them into the hash default speed to 0
+									FlowBandwidth test = FlowBandwidth.of(sw, match, dur, bytesCount, 0, in_port);
+									flowStats.put(nft,test);
+								}
+							}catch(IllegalArgumentException exc) {
+								System.out.println("Bad flow bandwidth" + exc);
+							}
+						}else {
+						
+							//if there is no existing flow stat insert with default 0 speed
+							flowStats.put(nft, FlowBandwidth.of(sw, match, dur, bytesCount, 0,in_port)); 					
+						}
+					}
+					if(debug) {
+						log.info("###########################################################################################################################################################################################");
+					}
+				}	
+			}	
+			
 		}
 
 	}
@@ -222,6 +385,7 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 		l.add(IOFSwitchService.class);
 		l.add(IThreadPoolService.class);
 		l.add(IRestApiService.class);
+		l.add(IStorageSourceService.class);
 		return l;
 	}
 
@@ -231,6 +395,7 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 		switchService = context.getServiceImpl(IOFSwitchService.class);
 		threadPoolService = context.getServiceImpl(IThreadPoolService.class);
 		restApiService = context.getServiceImpl(IRestApiService.class);
+		storageService = context.getServiceImpl(IStorageSourceService.class);
 
 		Map<String, String> config = context.getConfigParams(this);
 		if (config.containsKey(ENABLED_STR)) {
@@ -244,7 +409,7 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 
 		if (config.containsKey(INTERVAL_PORT_STATS_STR)) {
 			try {
-				portStatsInterval = Integer.parseInt(config.get(INTERVAL_PORT_STATS_STR).trim());
+				//portStatsInterval = Integer.parseInt(config.get(INTERVAL_PORT_STATS_STR).trim());
 			} catch (Exception e) {
 				log.error("Could not parse '{}'. Using default of {}", INTERVAL_PORT_STATS_STR, portStatsInterval);
 			}
@@ -296,7 +461,14 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 	 * Start all stats threads.
 	 */
 	private void startStatisticsCollection() {
+		
+		// create the table for storing flow data 
+		storageService.createTable(TABLE_NAME, null);
+		storageService.setTablePrimaryKeyName(TABLE_NAME,DPID);
+		storageService.deleteMatchingRows(TABLE_NAME, null);
+		
 		portStatsCollector = threadPoolService.getScheduledExecutor().scheduleAtFixedRate(new PortStatsCollector(), portStatsInterval, portStatsInterval, TimeUnit.SECONDS);
+		flowStatsCollector = threadPoolService.getScheduledExecutor().scheduleAtFixedRate(new FlowStatsCollector(), flowStatsInterval, flowStatsInterval, TimeUnit.SECONDS);
 		tentativePortStats.clear(); /* must clear out, otherwise might have huge BW result if present and wait a long time before re-enabling stats */
 		log.warn("Statistics collection thread(s) started");
 	}
@@ -310,6 +482,13 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 		} else {
 			log.warn("Statistics collection thread(s) stopped");
 		}
+		if (!flowStatsCollector.cancel(false)) {
+			log.error("Could not cancel flow stats thread");
+		} else {
+			log.warn("Statistics collection thread(s) stopped");
+		}
+		
+		
 	}
 
 	/**
@@ -357,7 +536,7 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 			}
 
 			try {
-				Thread.sleep(1000);
+				Thread.sleep(500);
 			} catch (InterruptedException e) {
 				log.error("Interrupted while waiting for statistics", e);
 			}
@@ -387,8 +566,28 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 						.setMatch(match)
 						.setOutPort(OFPort.ANY)
 						.setTableId(TableId.ALL)
+						.setOutGroup(OFGroup.ANY)
 						.build();
 				break;
+				
+			case FLOW_LIGHTWEIGHT:
+				
+				match = sw.getOFFactory().buildMatch().build();
+				req =  sw.getOFFactory().buildFlowLightweightStatsRequest()
+						.setMatch(match)
+						.setOutPort(OFPort.ANY) 
+						.setTableId(TableId.ALL)
+						.build();
+				break; 
+				
+			case FLOW_MONITOR:
+				
+				match = sw.getOFFactory().buildMatch().build();
+				req = sw.getOFFactory().buildFlowMonitorRequest().build();
+				
+				
+				break;
+				
 			case AGGREGATE:
 				match = sw.getOFFactory().buildMatch().build();
 				req = sw.getOFFactory().buildAggregateStatsRequest()
