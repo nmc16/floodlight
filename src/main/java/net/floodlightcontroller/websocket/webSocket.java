@@ -206,11 +206,19 @@ public class webSocket implements IStorageSourceListener, IFloodlightModule {
 	
 	protected void readTableFromStorage(String tableName) {
 		IResultSet tableResult = storageSourceService.executeQuery(tableName, null, null, null); //TODO configure the table results to send to web-gui
-		logger.info("number of sessions: " + getActiveSession().size());
+		if(tableResult.next()){
+			logger.info(tableResult.getRow().toString());
+		}else{
+			logger.info("No row found!");
+			return;
+		}
+
+		//logger.info("number of sessions: " + getActiveSession().size());
 		
 		Session sess = getActiveSession().get(0);
 		try {
-			sess.getRemote().sendString("Yo the table was changed eh");
+			sess.getRemote().sendString(tableResult.getRow().toString());
+			//sess.getRemote().sendString("Yo the table was changed eh");
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();

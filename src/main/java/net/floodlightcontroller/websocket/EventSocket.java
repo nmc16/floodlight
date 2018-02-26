@@ -64,7 +64,7 @@ public class EventSocket extends WebSocketAdapter
         while(elements.hasNext()){
         	JsonNode subscribed = elements.next();
         	activeSessions.registerTable(currSess, subscribed.asText());
-        	System.out.println("subscribe = "+subscribed.asText());
+        	//System.out.println("subscribe = "+subscribed.asText());
         }
     }
     
