@@ -1,23 +1,22 @@
 package net.floodlightcontroller.websocket;
 
 import java.io.IOException; 
-import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.List;
-
 import org.eclipse.jetty.websocket.api.Session;
 import org.eclipse.jetty.websocket.api.WebSocketAdapter;
 import com.fasterxml.jackson.core.*;
-import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-
-import net.floodlightcontroller.storage.IStorageSourceService;
 import net.floodlightcontroller.websocket.webSocket;
 
+/**
+ * Websocket class that handles connections between client and server
+ *
+ * @author luke.sanderson@carleton.ca
+ */
 public class EventSocket extends WebSocketAdapter
 {
-	private List<Session> sessions = new ArrayList<Session>();	
+	//private List<Session> sessions = new ArrayList<Session>();	
 	//public sessionListener activeSessions = sessionListener.getInstance();
 	public webSocket activeSessions = webSocket.getInstance();
 
@@ -26,13 +25,13 @@ public class EventSocket extends WebSocketAdapter
     public void onWebSocketConnect(Session sess)
     {
         super.onWebSocketConnect(sess);
-        System.out.println("Socket Connected: " + sess);
-        System.out.println(sess.getRemoteAddress());
+        //System.out.println("Socket Connected: " + sess);
+        //System.out.println(sess.getRemoteAddress());
         currSess = sess;
         activeSessions.addActiveSession(currSess);
        
         try {
-			sess.getRemote().sendString("HEYA muthafucka");
+			sess.getRemote().sendString("Connection established to websocket");
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -44,8 +43,7 @@ public class EventSocket extends WebSocketAdapter
     {
         super.onWebSocketText(message);
         
-        
-        System.out.println("Received TEXT message: " + message);
+        System.out.println("JSON received: " + message);
 
         //create ObjectMapper instance
         ObjectMapper objectMapper = new ObjectMapper();
@@ -67,7 +65,6 @@ public class EventSocket extends WebSocketAdapter
         	JsonNode subscribed = elements.next();
         	activeSessions.registerTable(currSess, subscribed.asText());
         	System.out.println("subscribe = "+subscribed.asText());
-        	
         }
     }
     
