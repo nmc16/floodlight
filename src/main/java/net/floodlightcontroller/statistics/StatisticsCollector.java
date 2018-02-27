@@ -165,8 +165,6 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 							newPortRow.put(Port_SPEED, speed);
 							
 							 storageService.insertRow(Port_TABLE_NAME, newPortRow);
-							 System.out.println("Sending to the port Table");
-							
 							
 							
 						} else { /* initialize */
