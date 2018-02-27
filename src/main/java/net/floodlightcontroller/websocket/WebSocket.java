@@ -1,40 +1,44 @@
 package net.floodlightcontroller.websocket;
 
-import java.io.IOException; 
+import java.io.IOException;  
 import java.util.Iterator;
 import org.eclipse.jetty.websocket.api.Session;
 import org.eclipse.jetty.websocket.api.WebSocketAdapter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.fasterxml.jackson.core.*;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import net.floodlightcontroller.websocket.webSocket;
+import net.floodlightcontroller.websocket.WebSocketManager;
 
 /**
- * Websocket class that handles connections between client and server
+ * WebSocket class that handles connections between client and server
  *
  * @author luke.sanderson@carleton.ca
  */
-public class EventSocket extends WebSocketAdapter
+public class WebSocket extends WebSocketAdapter
 {
-	//private List<Session> sessions = new ArrayList<Session>();	
-	//public sessionListener activeSessions = sessionListener.getInstance();
-	public webSocket activeSessions = webSocket.getInstance();
 
+	private static final Logger logger = LoggerFactory.getLogger(WebSocket.class); 	// Class logger
+	private static final boolean DEBUG = true; //Set to false to disable excessive logging
+	public WebSocketManager activeSessions = WebSocketManager.getInstance(); //Singleton architecture so we do not reference the wrong server
 	private Session currSess;
+
+	
+	
     @Override
     public void onWebSocketConnect(Session sess)
     {
         super.onWebSocketConnect(sess);
-        //System.out.println("Socket Connected: " + sess);
-        //System.out.println(sess.getRemoteAddress());
         currSess = sess;
         activeSessions.addActiveSession(currSess);
        
         try {
 			sess.getRemote().sendString("Connection established to websocket");
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			logger.error("Could not reach client websocket");
+			if(DEBUG){e.printStackTrace();}
 		}
     }
     
@@ -43,28 +47,30 @@ public class EventSocket extends WebSocketAdapter
     {
         super.onWebSocketText(message);
         
-        System.out.println("JSON received: " + message);
+        if(DEBUG){System.out.println("JSON received: " + message);}
 
         //create ObjectMapper instance
         ObjectMapper objectMapper = new ObjectMapper();
 
-        //read JSON like DOM Parser
+        //attempt to parse JSON received from client
         JsonNode rootNode = null;
 		try {
 			rootNode = objectMapper.readTree(message);
 		} catch (JsonProcessingException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			logger.error("Error while parsing JSON received from client");
+			if(DEBUG){e.printStackTrace();}
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			logger.error("Error while parsing JSON received from client");
+			if(DEBUG){e.printStackTrace();}
 		}
+		
+		//Parses the JSON for the subscribe object, then registers the tables located inside
         JsonNode subscribeNode = rootNode.path("subscribe");
         Iterator<JsonNode> elements = subscribeNode.elements();
         while(elements.hasNext()){
         	JsonNode subscribed = elements.next();
         	activeSessions.registerTable(currSess, subscribed.asText());
-        	//System.out.println("subscribe = "+subscribed.asText());
+        
         }
     }
     
@@ -81,6 +87,6 @@ public class EventSocket extends WebSocketAdapter
     public void onWebSocketError(Throwable cause)
     {
         super.onWebSocketError(cause);
-        cause.printStackTrace(System.err);
+        if(DEBUG){cause.printStackTrace(System.err);}
     }
 }

@@ -30,4 +30,4 @@ net.floodlightcontroller.statistics.StatisticsCollector
 net.floodlightcontroller.routing.RoutingManager
 net.floodlightcontroller.cpanalyzer.CPAnalyzer
 net.floodlightcontroller.portmod.PortModManager
-net.floodlightcontroller.websocket.webSocket
+net.floodlightcontroller.websocket.WebSocketManager

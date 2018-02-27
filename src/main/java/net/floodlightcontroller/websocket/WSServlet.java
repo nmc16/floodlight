@@ -9,12 +9,12 @@ import org.eclipse.jetty.websocket.servlet.WebSocketServletFactory;
  * @author luke.sanderson@carleton.ca
  */
 @SuppressWarnings("serial")
-public class EventServlet extends WebSocketServlet
+public class WSServlet extends WebSocketServlet
 {
     @Override
     public void configure(WebSocketServletFactory factory)
     {
-        factory.register(EventSocket.class);
+        factory.register(WebSocket.class);
         
     }
 }

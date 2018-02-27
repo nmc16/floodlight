@@ -87,8 +87,9 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
     private static final String Port_DPID = "dpid";
     private static final String Port_SPEED_tx = "speedTX";
     private static final String Port_SPEED_rx = "speedRX";
+    private static final String Port_CURRENT_SPEED = "currentSpeed"; //port current speed
     private static final String Port_ID = "portid";
-    private static final String Port_COLUMNS[] = {Port_DPID,Port_SPEED_tx,Port_SPEED_rx,Port_ID};
+    private static final String Port_COLUMNS[] = {Port_DPID,Port_SPEED_tx,Port_SPEED_rx,Port_CURRENT_SPEED,Port_ID};
     
 
   	
@@ -163,6 +164,7 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 							Map<String, Object> newPortRow = new HashMap<>();
 							newPortRow.put(Port_DPID, npt.getNodeId());
 							newPortRow.put(Port_ID, npt.getPortId());
+							newPortRow.put(Port_CURRENT_SPEED, speed);
 							newPortRow.put(Port_SPEED_tx, (txBytesCounted.getValue() * BITS_PER_BYTE) / timeDifSec);
 							newPortRow.put(Port_SPEED_rx, (rxBytesCounted.getValue() * BITS_PER_BYTE) / timeDifSec);
 							 storageService.insertRow(Port_TABLE_NAME, newPortRow);

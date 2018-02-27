@@ -1,6 +1,6 @@
 package net.floodlightcontroller.websocket;
 
-import java.io.IOException; 
+import java.io.IOException;  
 import java.util.Collection;    
 import java.util.HashMap;
 import java.util.List;
@@ -35,41 +35,29 @@ import java.util.ArrayList;
  * Module starts a Jetty server, and registers storage listeners for real-time table changes
  *
  * TODO: Check to make sure all threads are finished correctly.
- * TODO: Refactor for easier reading.
  *
  * @author luke.sanderson@carleton.ca
  */
-public class webSocket implements IStorageSourceListener, IFloodlightModule {
+public class WebSocketManager implements IStorageSourceListener, IFloodlightModule {
 	
 	// Class logger
-	private static final Logger logger = LoggerFactory.getLogger(webSocket.class);
+	private static final Logger logger = LoggerFactory.getLogger(WebSocketManager.class);
+	private static final boolean VERBOSE = false;
 	
-	private static webSocket instance;
+	private static WebSocketManager instance;
 	protected IStorageSourceService storageSourceService;
 	protected IRestApiService restApiService;
 	private HashMap<Session, List<String>> activeTables= new HashMap<Session, List<String>>();
 	private List<Session> sessions = new ArrayList<Session>();	
 	
-	//public sessionListener activeSessions = sessionListener.getInstance();
-	//private static final String TOPOLOGY_TABLE_NAME = "controller_firewallrules";
-
-
-    /** Static 'instance' method */
-    public static webSocket getInstance() {
+    /** Method to keep instance static **/
+    public static WebSocketManager getInstance() {
         return instance;
     }
 
 	@Override
 	public Collection<Class<? extends IFloodlightService>> getModuleServices() {
 		
-		/*
-		Collection<Class<? extends IFloodlightService>> l =
-		        new ArrayList<Class<? extends IFloodlightService>>();
-		    l.add(IStorageSourceService.class);
-		    l.add(IRestApiService.class);
-		    return l;
-		    */
-
 		return null;
 	}
 
@@ -95,17 +83,15 @@ public class webSocket implements IStorageSourceListener, IFloodlightModule {
 	public void init(FloodlightModuleContext context) throws FloodlightModuleException {
 		storageSourceService = context.getServiceImpl(IStorageSourceService.class);
 		restApiService = context.getServiceImpl(IRestApiService.class);
-	    logger.warn("made it to init");
+	    if(VERBOSE){logger.info("made it to init");}
 	}
 
 	@Override
 	public void startUp(FloodlightModuleContext context) throws FloodlightModuleException {
 		
-		
 		instance = this; //singleton to assure one is being called
-		logger.info("made it before startup");
+		if(VERBOSE){logger.info("made it before startup");}
 		
-		logger.warn("begginning main");
 		Server server = new Server();
 		ServerConnector connector = new ServerConnector(server);
 		connector.setPort(8111);
@@ -118,13 +104,13 @@ public class webSocket implements IStorageSourceListener, IFloodlightModule {
 		server.setHandler(serverEndpoint);
 	        
 	        // Add a websocket to a specific path spec
-	        ServletHolder holderEvents = new ServletHolder("ws-events", EventServlet.class);
+	        ServletHolder holderEvents = new ServletHolder("ws-events", WSServlet.class);
 	        serverEndpoint.addServlet(holderEvents, "/events/*");
 	       
 	        try
 	        {
 	            server.start();
-	            logger.warn("server is up");
+	            logger.info("Jetty server is up for websocket connections");
 	            
 	            //server.dump(System.err);
 	            //server.join();
@@ -133,12 +119,17 @@ public class webSocket implements IStorageSourceListener, IFloodlightModule {
 	        catch (Throwable t)
 	        {
 	        	logger.warn("server did not start");
-	            t.printStackTrace(System.err);
+	            if(VERBOSE){t.printStackTrace(System.err);}
 	        }
 	}
 	
 
-	//Register for storage updates on the tables requested by web-gui
+	/**
+	 * Register for storage updates on the tables requested by web-gui
+	 * @param session		Session we are looking at
+	 * @param tableName		Tables that are associated with the session, to be registered
+	 * @return				Returns a HashMap that contains the sessions with their associated tables
+	 */
 	public HashMap<Session, List<String>> registerTable(Session session, String tableName){
 		
 		try {
@@ -184,28 +175,25 @@ public class webSocket implements IStorageSourceListener, IFloodlightModule {
 	
 	@Override
 	public void rowsModified(String tableName, Set<Object> rowKeys) {
-		
-		//if (tableName.equals(TOPOLOGY_TABLE_NAME)) {
-			logger.info("Table: " + tableName + " was modified");
+			if(VERBOSE){logger.info("Table: " + tableName + " was modified");}
 			readTableFromStorage(tableName);
-			return;
-		//}
-		//logger.info("rows modified for table");
 	}
 
 	@Override
 	public void rowsDeleted(String tableName, Set<Object> rowKeys) {
-		//if (tableName.equals(TOPOLOGY_TABLE_NAME)) {
-			logger.warn(tableName);
-			logger.info("Table: " + tableName + " had rows deleted");
+			if(VERBOSE){logger.info("Table: " + tableName + " had rows deleted");}
 			readTableFromStorage(tableName);
-			return;
-		//}
-		 //logger.info("rows deleted2");
 	}
 	
+	/**
+	 * When a table is updated, a query is perfomred then the result 
+	 * is sent out over the websocket to the relevant session client
+	 * 
+	 * @param tableName
+	 * 			the name of the updated table to query
+	 */
 	protected void readTableFromStorage(String tableName) {
-		IResultSet tableResult = storageSourceService.executeQuery(tableName, null, null, null); //TODO configure the table results to send to web-gui
+		IResultSet tableResult = storageSourceService.executeQuery(tableName, null, null, null); 
 		if(tableResult.next()){
 			logger.info(tableResult.getRow().toString());
 		}else{
@@ -215,22 +203,35 @@ public class webSocket implements IStorageSourceListener, IFloodlightModule {
 
 		//logger.info("number of sessions: " + getActiveSession().size());
 		
-		Session sess = getActiveSession().get(0);
+		Session sess = getActiveSession().get(0); //Currently there is only ever one session active, however this code is here for future improvements
 		try {
-			sess.getRemote().sendString(tableResult.getRow().toString());
-			//sess.getRemote().sendString("Yo the table was changed eh");
+			sess.getRemote().sendString(tableResult.getRow().toString()); //Send table data out to client
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			logger.warn("Error sending updated table data to client");
+			if(VERBOSE){e.printStackTrace();}
 		}
 	}
 	
-
+	/**
+	 * Method to keep track of active websocket sessions on server
+	 * 
+	 * @param session
+	 * 			session to add to list
+	 */
 	public void addActiveSession(Session session)
 	{
 		this.sessions.add(session);
-		logger.warn("Session has been added");
+		logger.info("Session has been added");
 	}
+	
+	/**
+	 * Removes active sessions from both the registered tables and the list that 
+	 * keeps track of current sessions. This makes sure that when you close the connection that we are not still listening
+	 * for irrelevant tables.
+	 * 
+	 * @param session
+	 * 			Session that is being closed
+	 */
 	public void removeActiveSession(Session session)
 	{
 		logger.warn("removing listeners for: "+activeTables.get(session));
@@ -238,14 +239,17 @@ public class webSocket implements IStorageSourceListener, IFloodlightModule {
 			List<String> tablesToRemove = activeTables.get(session);
 			for(String table : tablesToRemove){
 				storageSourceService.removeListener(table, this); //remove the listeners when the connection is closed
-				logger.warn("removed: " + table);
+				logger.info("removed: " + table);
 			}
 		}
-			//remove session from lists				
+		
+		//remove session from lists				
 		activeTables.remove(session);
 	    this.sessions.remove(session);
-	    logger.warn("Session removed");
+	    logger.info("Session removed");
 	}
+	
+	//Return how many active sessions on websockets
 	public List<Session> getActiveSession()
 	{
 		return this.sessions;
