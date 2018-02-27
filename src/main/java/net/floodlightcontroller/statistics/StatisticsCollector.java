@@ -68,11 +68,8 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 	private static final HashMap<NodePortTuple, SwitchPortBandwidth> tentativePortStats = new HashMap<NodePortTuple, SwitchPortBandwidth>();
 	
 	
-	//variables for creating/updating the tables 
-	
-	
+	//variables for creating/updating the FLowTables
 	private static final String TABLE_NAME = "FlowStatistics";
-	private static final String NFT = "nft";
     private static final String DPID = "dpid";
     private static final String ETHSRC = "ethsrc";
     private static final String ETHDST = "ethdst";
@@ -81,16 +78,19 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
     private static final String BYTECOUNT = "bytecount";
     private static final String SPEED = "speed";
     private static final String INPORT = "port";
-    
     private static final String COLUMNS[] = {DPID, ETHSRC, ETHDST, ETHTYPE, DURATION, BYTECOUNT, SPEED, INPORT};
-
     private static final long REQUEST_TIMEOUT_MSEC = 1000;
+    
+    
+    
+    private static final String Port_TABLE_NAME = "FlowStatistics";
+    private static final String Port_DPID = "dpid";
+    private static final String Port_SPEED = "speed";
+    private static final String Port_ID = "portid";
+    private static final String Port_COLUMNS[] = {Port_DPID,Port_SPEED,Port_ID};
     
 
   	
-	
-	
-
 	/**
 	 * Run periodically to collect all port statistics. This only collects
 	 * bandwidth stats right now, but it could be expanded to record other
@@ -157,6 +157,15 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 									U64.ofRaw((txBytesCounted.getValue() * BITS_PER_BYTE) / timeDifSec), 
 									pse.getRxBytes(), pse.getTxBytes())
 									);
+							
+							//going to put the table push in here
+							Map<String, Object> newPortRow = new HashMap<>();
+							newPortRow.put(Port_DPID, npt.getNodeId());
+							newPortRow.put(Port_ID, npt.getPortId());
+							newPortRow.put(Port_SPEED, speed);
+							
+							 storageService.insertRow(Port_TABLE_NAME, newPortRow);
+							
 							
 						} else { /* initialize */
 							tentativePortStats.put(npt, SwitchPortBandwidth.of(npt.getNodeId(), npt.getPortId(), U64.ZERO, U64.ZERO, U64.ZERO, pse.getRxBytes(), pse.getTxBytes()));
@@ -246,13 +255,6 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 						MacAddress eth_src = match.get(MatchField.ETH_SRC);
 						MacAddress eth_dst = match.get(MatchField.ETH_DST);
 						EthType eth_type = match.get(MatchField.ETH_TYPE);
-
-						
-						 
-						
-						
-						
-						
 						
 						
 						// now I need to set up the comparisons 
@@ -284,7 +286,7 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 									//The SOCKET send to the gui should be implemented here 
 
 									if(debug) {
-										log.info("sw: "+ sw+ " speed(bps): "+ speed  + " bytes:" + bytesCount.getValue() + " Duration (s): " +dur + " In_Port: " + in_port) ;
+										log.info("sw: "+ sw+ " speed(bps): "+ speed  + " bytes:" + bytesCount.getValue() + " Duration (s): " +dur + " In_Port: " + in_port + " Eth_Type: " + eth_type) ;
 									}	
 									
 									 //Build the new row to go into the table with everything except speed
@@ -466,6 +468,13 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 		storageService.createTable(TABLE_NAME, null);
 		storageService.setTablePrimaryKeyName(TABLE_NAME,DPID);
 		storageService.deleteMatchingRows(TABLE_NAME, null);
+		
+		
+		//create table for port stats
+		storageService.createTable(Port_TABLE_NAME, null);
+		storageService.setTablePrimaryKeyName(Port_TABLE_NAME,Port_DPID);
+		storageService.deleteMatchingRows(Port_TABLE_NAME, null);
+		
 		
 		portStatsCollector = threadPoolService.getScheduledExecutor().scheduleAtFixedRate(new PortStatsCollector(), portStatsInterval, portStatsInterval, TimeUnit.SECONDS);
 		flowStatsCollector = threadPoolService.getScheduledExecutor().scheduleAtFixedRate(new FlowStatsCollector(), flowStatsInterval, flowStatsInterval, TimeUnit.SECONDS);
