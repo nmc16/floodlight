@@ -72,7 +72,7 @@ public class EventSocket extends WebSocketAdapter
     public void onWebSocketClose(int statusCode, String reason)
     {
         super.onWebSocketClose(statusCode,reason);
-        System.out.println("Socket Closed: [" + statusCode + "] " + reason);
+        //System.out.println("Socket Closed: [" + statusCode + "] " + reason);
         activeSessions.removeActiveSession(currSess);
         
     }
