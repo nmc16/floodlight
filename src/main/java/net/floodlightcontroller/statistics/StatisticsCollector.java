@@ -83,7 +83,7 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
     
     
     
-    private static final String Port_TABLE_NAME = "FlowStatistics";
+    private static final String Port_TABLE_NAME = "PortStatistics";
     private static final String Port_DPID = "dpid";
     private static final String Port_SPEED = "speed";
     private static final String Port_ID = "portid";
