@@ -267,10 +267,28 @@
 			<artifactId>jackson-dataformat-cbor</artifactId>
 			<version>${lib-jackson-version}</version>
 		</dependency>
+		<dependency>
+      		<groupId>org.eclipse.jetty.websocket</groupId>
+      		<artifactId>websocket-api</artifactId>
+      		<version>${jetty-version}</version>
+    	</dependency>
+    	<!-- To run websockets in embedded server -->
+    	<dependency>
+      		<groupId>org.eclipse.jetty.websocket</groupId>
+      		<artifactId>websocket-server</artifactId>
+      		<version>${jetty-version}</version>
+    	</dependency>
+    	<!-- To run websockets client -->
+    	<dependency>
+      		<groupId>org.eclipse.jetty.websocket</groupId>
+      		<artifactId>websocket-client</artifactId>
+      		<version>${jetty-version}</version>
+    	</dependency>
 	</dependencies>
 	<properties>
 		<lib-restlet-version>2.3.2</lib-restlet-version>
 		<lib-jackson-version>2.4.4</lib-jackson-version>
 		<lib-hamcrest-version>1.3</lib-hamcrest-version>
+		<jetty-version>9.2.7.v20150116</jetty-version>
 	</properties>
 </project>
