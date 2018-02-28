@@ -48,7 +48,7 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 	private static IStorageSourceService storageService;
 
 	private static boolean isEnabled = false;
-	private static boolean debug = true;
+	private static boolean debug = false;
 	
 	private static int portStatsInterval = 2; /* could be set by REST API, so not final */
 	private static int flowStatsInterval = 2; 

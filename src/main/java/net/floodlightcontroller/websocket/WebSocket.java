@@ -19,14 +19,10 @@ import net.floodlightcontroller.websocket.WebSocketManager;
  */
 public class WebSocket extends WebSocketAdapter
 {
-
 	private static final Logger logger = LoggerFactory.getLogger(WebSocket.class); 	// Class logger
-	private static final boolean DEBUG = true; //Set to false to disable excessive logging
 	public WebSocketManager activeSessions = WebSocketManager.getInstance(); //Singleton architecture so we do not reference the wrong server
 	private Session currSess;
 
-	
-	
     @Override
     public void onWebSocketConnect(Session sess)
     {
@@ -38,7 +34,7 @@ public class WebSocket extends WebSocketAdapter
 			sess.getRemote().sendString("Connection established to websocket");
 		} catch (IOException e) {
 			logger.error("Could not reach client websocket");
-			if(DEBUG){e.printStackTrace();}
+			logger.error(e.getLocalizedMessage());
 		}
     }
     
@@ -47,7 +43,7 @@ public class WebSocket extends WebSocketAdapter
     {
         super.onWebSocketText(message);
         
-        if(DEBUG){System.out.println("JSON received: " + message);}
+        logger.debug("JSON received: " + message);
 
         //create ObjectMapper instance
         ObjectMapper objectMapper = new ObjectMapper();
@@ -58,19 +54,18 @@ public class WebSocket extends WebSocketAdapter
 			rootNode = objectMapper.readTree(message);
 		} catch (JsonProcessingException e) {
 			logger.error("Error while parsing JSON received from client");
-			if(DEBUG){e.printStackTrace();}
+			logger.error(e.getLocalizedMessage());
 		} catch (IOException e) {
 			logger.error("Error while parsing JSON received from client");
-			if(DEBUG){e.printStackTrace();}
+			logger.error(e.getLocalizedMessage());
 		}
 		
 		//Parses the JSON for the subscribe object, then registers the tables located inside
         JsonNode subscribeNode = rootNode.path("subscribe");
         Iterator<JsonNode> elements = subscribeNode.elements();
-        while(elements.hasNext()){
+        while(elements.hasNext()) {
         	JsonNode subscribed = elements.next();
         	activeSessions.registerTable(currSess, subscribed.asText());
-        
         }
     }
     
@@ -78,15 +73,14 @@ public class WebSocket extends WebSocketAdapter
     public void onWebSocketClose(int statusCode, String reason)
     {
         super.onWebSocketClose(statusCode,reason);
-        //System.out.println("Socket Closed: [" + statusCode + "] " + reason);
+        logger.debug("Socket Closed: [" + statusCode + "] " + reason);
         activeSessions.removeActiveSession(currSess);
-        
     }
     
     @Override
     public void onWebSocketError(Throwable cause)
     {
         super.onWebSocketError(cause);
-        if(DEBUG){cause.printStackTrace(System.err);}
+        logger.error(cause.getLocalizedMessage());
     }
 }
