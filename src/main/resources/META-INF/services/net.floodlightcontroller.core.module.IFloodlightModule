@@ -31,3 +31,4 @@ net.floodlightcontroller.routing.RoutingManager
 net.floodlightcontroller.cpanalyzer.CPAnalyzer
 net.floodlightcontroller.portmod.PortModManager
 net.floodlightcontroller.websocket.WebSocketManager
+net.floodlightcontroller.storage.nosql.CassandraStorageSource
