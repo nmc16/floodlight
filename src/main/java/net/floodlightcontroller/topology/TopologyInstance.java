@@ -83,6 +83,7 @@ public class TopologyInstance {
 
     protected TopologyInstance(Map<DatapathId, Set<OFPort>> portsWithLinks,
             Set<NodePortTuple> portsBlocked,
+            Set<Link> linksBlocked,
             Map<NodePortTuple, Set<Link>> linksNonBcastNonTunnel,
             Set<NodePortTuple> portsWithMoreThanTwoLinks,
             Set<NodePortTuple> portsTunnel, 
@@ -123,7 +124,7 @@ public class TopologyInstance {
         this.portsWithMoreThanTwoLinks = new HashSet<NodePortTuple>(portsWithMoreThanTwoLinks);
         this.portsTunnel = new HashSet<NodePortTuple>(portsTunnel);
 
-        this.linksBlocked = new HashSet<Link>();
+        this.linksBlocked = new HashSet<Link>(linksBlocked);
 
         this.clusters = new HashSet<Cluster>();
         this.clusterFromSwitch = new HashMap<DatapathId, Cluster>();

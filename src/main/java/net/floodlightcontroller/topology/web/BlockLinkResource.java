@@ -84,11 +84,11 @@ public class BlockLinkResource extends ServerResource {
     /** TODO: Rename this */
     private class TestDeserializer extends StdDeserializer<DatapathId> {
 
-        public TestDeserializer() {
+        TestDeserializer() {
             this(null);
         }
 
-        public TestDeserializer(Class<?> vc) {
+        TestDeserializer(Class<?> vc) {
             super(vc);
         }
 

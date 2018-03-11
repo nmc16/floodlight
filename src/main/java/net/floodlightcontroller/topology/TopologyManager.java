@@ -469,8 +469,8 @@ ITopologyManagerBackend, ILinkDiscoveryListener, IOFMessageListener {
             NodePortTuple dst = new NodePortTuple(link.getDst(), link.getDstPort());
 
             Set<NodePortTuple> nodes = getCurrentInstance().getBlockedPorts();
-            //nodes.add(src);
-            //nodes.add(dst);
+            nodes.add(src);
+            nodes.add(dst);
             // TODO: Remove
             log.info("Blocked port list: " + getCurrentInstance().getBlockedPorts());
 
@@ -489,7 +489,7 @@ ITopologyManagerBackend, ILinkDiscoveryListener, IOFMessageListener {
         // Tell the switches to allow traffic over the ports
         boolean ret;
         if ((ret = changeLink(link, false))) {
-            // If the operation passed we can add the ports to the blocked list
+            // If the operation passed we can remove the ports to the blocked list
             NodePortTuple src = new NodePortTuple(link.getSrc(), link.getSrcPort());
             NodePortTuple dst = new NodePortTuple(link.getDst(), link.getDstPort());
 
@@ -518,12 +518,12 @@ ITopologyManagerBackend, ILinkDiscoveryListener, IOFMessageListener {
 
         // Send port modifications at same time to reduce waiting time
         ArrayList<Future<OFPortMod>> futures = new ArrayList<>();
-        futures.add(portModService.createPortModAsync(link.getSrc(), link.getSrcPort(), OFPortConfig.NO_RECV, block));
-        futures.add(portModService.createPortModAsync(link.getDst(), link.getDstPort(), OFPortConfig.NO_RECV, block));
+        futures.add(portModService.createPortModAsync(link.getSrc(), link.getSrcPort(), OFPortConfig.PORT_DOWN, block));
+        futures.add(portModService.createPortModAsync(link.getDst(), link.getDstPort(), OFPortConfig.PORT_DOWN, block));
 
         // Now loop over the futures and get the results
         /* TODO: How are we actually going to handle failure here? For example if only one port modification is
-        *  TODO: successful how do we revert state? For now we don't care but should be looked at */
+         * TODO: successful how do we revert state? For now we don't care but should be looked at */
         for (Future<OFPortMod> future : futures) {
             try {
                 // We don't care about the return, just that it finished successfully
@@ -548,12 +548,12 @@ ITopologyManagerBackend, ILinkDiscoveryListener, IOFMessageListener {
 
     @Override
     public Set<Link> getBlockedLinks() {
-        Set<Link> instanceLinks;
         Set<Link> blockedLinks = new HashSet<>();
+        Set<Link> instanceLinks = getCurrentInstance().getBlockedLinks();
 
-        instanceLinks = getCurrentInstance().getBlockedLinks();
-        if (instanceLinks != null)
+        if (instanceLinks != null) {
             blockedLinks.addAll(instanceLinks);
+        }
 
         return blockedLinks;
     }
@@ -896,7 +896,7 @@ ITopologyManagerBackend, ILinkDiscoveryListener, IOFMessageListener {
      * openflowdomain.  Get all the switches in the same openflow
      * domain as the sw (disabling tunnels).  Then get all the
      * external switch ports and send these packets out.
-     * @param sw
+     * @param pinSwitch
      * @param pi
      * @param cntx
      */
@@ -1061,15 +1061,17 @@ ITopologyManagerBackend, ILinkDiscoveryListener, IOFMessageListener {
      * topology was created or not.
      */
     protected boolean createNewInstance(String reason, boolean forced) {
-        Set<NodePortTuple> blockedPorts = new HashSet<NodePortTuple>();
-
-        // We want to preserve the lists of blocked ports across new topologies
-        if (currentInstance != null) {
-            // TODO: blockedPorts = currentInstance.getBlockedPorts();
-        }
 
         if (!linksUpdated && !forced) {
             return false;
+        }
+
+        // We want to preserve the lists of blocked ports across new topologies
+        Set<NodePortTuple> blockedPorts = new HashSet<NodePortTuple>();
+        Set<Link> blockedLinks = new HashSet<>();
+        if (currentInstance != null) {
+            blockedPorts = currentInstance.getBlockedPorts();
+            blockedLinks = currentInstance.getBlockedLinks();
         }
 
         Map<NodePortTuple, Set<Link>> openflowLinks;
@@ -1114,6 +1116,7 @@ ITopologyManagerBackend, ILinkDiscoveryListener, IOFMessageListener {
 
         TopologyInstance nt = new TopologyInstance(switchPorts,
                 blockedPorts,
+                blockedLinks,
                 openflowLinks,
                 broadcastDomainPorts,
                 tunnelPorts,

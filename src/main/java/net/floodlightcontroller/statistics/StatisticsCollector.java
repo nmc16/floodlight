@@ -50,8 +50,8 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 	private static boolean isEnabled = false;
 	private static boolean debug = false;
 	
-	private static int portStatsInterval = 2; /* could be set by REST API, so not final */
-	private static int flowStatsInterval = 2; 
+	private static int portStatsInterval = 10; /* could be set by REST API, so not final */
+	private static int flowStatsInterval = 10;
 	private static ScheduledFuture<?> portStatsCollector;
 	private static ScheduledFuture<?> flowStatsCollector;
 
@@ -59,6 +59,7 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 	private static final long MILLIS_PER_SEC = 1000;
 	
 	private static final String INTERVAL_PORT_STATS_STR = "collectionIntervalPortStatsSeconds";
+	private static final String INTERVAL_FLOW_STATS_STR = "collectionIntervalFlowStatsSeconds";
 	private static final String ENABLED_STR = "enable";
 	
 	private static final HashMap<NodePortTuple, SwitchPortBandwidth> portStats = new HashMap<NodePortTuple, SwitchPortBandwidth>();
@@ -218,7 +219,7 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 	}
 	
 	
-	/*
+	/**
 	 * 	Added by Charlie Hardwick-Kelly Carleton University 
 	 * 	The purpose of this class is to track per flow metrics from within the network  
 	 * 	one key advantage of the flow metrics is that they contain a duration time stamp 
@@ -244,55 +245,52 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 
 					OFFlowStatsReply fsr = (OFFlowStatsReply) r; 
 					for ( OFFlowStatsEntry fse : fsr.getEntries()) {
-						//extract the necessary information from the existing stats and 
+						// extract the necessary information from the existing stats and
 						DatapathId sw = e.getKey();
 						Match match = fse.getMatch(); 						
 						OFPort in_port = match.get(MatchField.IN_PORT);
-						U64 bytesCount = fse.getByteCount(); //take in the number of bytes  
-						long dur = fse.getDurationSec(); //take in the duration 
-						
-							
-						
-						//PUll all the necessary information from new stat
+						U64 bytesCount = fse.getByteCount(); // take in the number of bytes
+						long dur = fse.getDurationSec(); // take in the duration
 
+						// Pull all the necessary information from new stat
 						MacAddress eth_src = match.get(MatchField.ETH_SRC);
 						MacAddress eth_dst = match.get(MatchField.ETH_DST);
 						EthType eth_type = match.get(MatchField.ETH_TYPE);
 						
-						
 						// now I need to set up the comparisons 
-						NodeFlowTuple nft = new NodeFlowTuple(sw,match) ;
-						if(flowStats.containsKey(nft)){	
+						NodeFlowTuple nft = new NodeFlowTuple(sw, match) ;
+						if (flowStats.containsKey(nft)){
 							//Retrieve the previous stat response information from the hash
 							FlowBandwidth stat = flowStats.get(nft);
 							
-							//Calculate the bytes difference between current and previous collections
+							// Calculate the bytes difference between current and previous collections
 							// convert from bytes to bits 
-							long byteDiff = (bytesCount.getValue() - stat.getBytes().getValue())*BITS_PER_BYTE;
+							long byteDiff = (bytesCount.getValue() - stat.getBytes().getValue()) * BITS_PER_BYTE;
 							
-							//Calculate the difference in time between the current and previous stat response
+							// Calculate the difference in time between the current and previous stat response
 							long timediff = dur - stat.getDuration();
 							long speed;
+
 							// Avoid divide by zero error
-							if(byteDiff!=0){							
-								speed= byteDiff/timediff;
-							}else {
-								speed= 0;
+							if (byteDiff!=0){
+								speed = byteDiff/timediff;
+							} else {
+								speed = 0;
 							}
+
 							try {
-								if(!(speed < 0)) {		
+								if (!(speed < 0)) {
 									
 									// if we have a valid flow we want to update the hash and then send the information to the GUI
-									FlowBandwidth test = FlowBandwidth.of(sw, match, dur, bytesCount, speed,in_port);
-									flowStats.put(nft,test);		
+									FlowBandwidth test = FlowBandwidth.of(sw, match, dur, bytesCount, speed, in_port);
+									flowStats.put(nft, test);
 									
-									//The SOCKET send to the gui should be implemented here 
-
+									// The SOCKET send to the gui should be implemented here
 									if(debug) {
-										log.info("sw: "+ sw+ " speed(bps): "+ speed  + " bytes:" + bytesCount.getValue() + " Duration (s): " +dur + " In_Port: " + in_port + " Eth_Type: " + eth_type) ;
-									}	
+										log.info("sw: " + sw + " speed(bps): " + speed  + " bytes:" + bytesCount.getValue() + " Duration (s): " +dur + " In_Port: " + in_port + " Eth_Type: " + eth_type) ;
+									}
 									
-									 //Build the new row to go into the table with everything except speed
+									 // Build the new row to go into the table with everything except speed
 									 Map<String, Object> newRow = new HashMap<>();
 									 newRow.put(DPID, sw);
 									 newRow.put(ETHSRC, eth_src);
@@ -303,32 +301,28 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 									 newRow.put(INPORT, in_port);
 									 newRow.put(SPEED, speed);
 									 storageService.insertRow(TABLE_NAME, newRow);
-									
-									
-									
-								}else {
+
+								} else {
 									// if we are getting a negative speed a flow has restarted in the network, we do not want to 
 									// send these values or print them out so just insert them into the hash default speed to 0
 									FlowBandwidth test = FlowBandwidth.of(sw, match, dur, bytesCount, 0, in_port);
 									flowStats.put(nft,test);
 								}
-							}catch(IllegalArgumentException exc) {
-								System.out.println("Bad flow bandwidth" + exc);
+							} catch(IllegalArgumentException exc) {
+								log.error("Bad flow bandwidth" + exc);
 							}
-						}else {
+						} else {
 						
-							//if there is no existing flow stat insert with default 0 speed
+							// if there is no existing flow stat insert with default 0 speed
 							flowStats.put(nft, FlowBandwidth.of(sw, match, dur, bytesCount, 0,in_port)); 					
 						}
 					}
-					if(debug) {
+					if (debug) {
 						log.info("###########################################################################################################################################################################################");
 					}
 				}	
-			}	
-			
+			}
 		}
-
 	}
 
 	/**
@@ -414,12 +408,21 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 
 		if (config.containsKey(INTERVAL_PORT_STATS_STR)) {
 			try {
-				//portStatsInterval = Integer.parseInt(config.get(INTERVAL_PORT_STATS_STR).trim());
+				portStatsInterval = Integer.parseInt(config.get(INTERVAL_PORT_STATS_STR).trim());
 			} catch (Exception e) {
 				log.error("Could not parse '{}'. Using default of {}", INTERVAL_PORT_STATS_STR, portStatsInterval);
 			}
 		}
 		log.info("Port statistics collection interval set to {}s", portStatsInterval);
+
+		if (config.containsKey(INTERVAL_FLOW_STATS_STR)) {
+		    try {
+		        flowStatsInterval = Integer.parseInt(config.get(INTERVAL_FLOW_STATS_STR).trim());
+            } catch (Exception e) {
+                log.error("Could not parse '{}'. Using default of {}", INTERVAL_FLOW_STATS_STR, flowStatsInterval);
+            }
+        }
+        log.info("Flow statistics collection interval set to {}s", flowStatsInterval);
 	}
 
 	@Override
@@ -457,6 +460,11 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 		} 
 		/* otherwise, state is not changing; no-op */
 	}
+
+	@Override
+	public boolean getCollectionStatus() {
+		return isEnabled;
+	}
 	
 	/*
 	 * Helper functions
@@ -469,13 +477,13 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 		
 		// create the table for storing flow data 
 		storageService.createTable(TABLE_NAME, null);
-		storageService.setTablePrimaryKeyName(TABLE_NAME,DPID);
+		storageService.setTablePrimaryKeyName(TABLE_NAME, "id");
 		storageService.deleteMatchingRows(TABLE_NAME, null);
 		
 		
 		//create table for port stats
 		storageService.createTable(Port_TABLE_NAME, null);
-		storageService.setTablePrimaryKeyName(Port_TABLE_NAME,Port_DPID);
+		storageService.setTablePrimaryKeyName(Port_TABLE_NAME, "id");
 		storageService.deleteMatchingRows(Port_TABLE_NAME, null);
 		
 		

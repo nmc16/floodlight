@@ -6,8 +6,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.ArrayList;
 
-import org.eclipse.jetty.server.Server; 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.module.SimpleModule;
+import net.floodlightcontroller.core.web.serializers.*;
+import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
@@ -17,18 +21,15 @@ import net.floodlightcontroller.core.module.FloodlightModuleContext;
 import net.floodlightcontroller.core.module.FloodlightModuleException;
 import net.floodlightcontroller.core.module.IFloodlightModule;
 import net.floodlightcontroller.core.module.IFloodlightService;
-
-
 import net.floodlightcontroller.storage.IResultSet;
 import net.floodlightcontroller.storage.IStorageSourceListener;
 import net.floodlightcontroller.storage.IStorageSourceService;
 import net.floodlightcontroller.storage.StorageException;
 
-
-
+import org.projectfloodlight.openflow.types.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import java.util.ArrayList;
+
 
 
 /**
@@ -37,7 +38,9 @@ import java.util.ArrayList;
  * @author luke.sanderson@carleton.ca
  */
 public class WebSocketManager implements IStorageSourceListener, IFloodlightModule {
-	
+
+    private static final String DELETED = "deleted";
+    private static final String TABLE_NAME = "table";
 	protected static final Logger logger = LoggerFactory.getLogger(WebSocketManager.class);
 	protected FloodlightModuleContext fmlContext;
 	private static WebSocketManager instance;
@@ -47,7 +50,9 @@ public class WebSocketManager implements IStorageSourceListener, IFloodlightModu
 	private List<Session> sessions = new ArrayList<Session>();	
 	
 	
-    /** Method to keep instance static **/
+    /**
+     * Method to keep instance static
+     */
     public static WebSocketManager getInstance() {
         return instance;
     }
@@ -100,25 +105,23 @@ public class WebSocketManager implements IStorageSourceListener, IFloodlightModu
 		serverEndpoint.setContextPath("/");
 		server.setHandler(serverEndpoint);
 	        
-	        // Add a webSocket to a specific path spec
-	        ServletHolder holderEvents = new ServletHolder("ws-events", WSServlet.class);
-	        serverEndpoint.addServlet(holderEvents, "/events/*");
+        // Add a webSocket to a specific path spec
+        ServletHolder holderEvents = new ServletHolder("ws-events", WSServlet.class);
+        serverEndpoint.addServlet(holderEvents, "/events/*");
 	       
-	        try
-	        {
-	            server.start();
-	            logger.info("Jetty server is up for websocket connections on port: " + httpWSPort);
-	        }
-	        catch (Throwable t)
-	        {
-	        	logger.warn("server did not start");
-	        	logger.error(t.getLocalizedMessage());
-	        }
+        try {
+            server.start();
+            logger.info("Jetty server is up for websocket connections on port: " + httpWSPort);
+        } catch (Throwable t) {
+            logger.warn("Server did not start");
+            logger.error(t.getLocalizedMessage());
+        }
 	}
 	
 
 	/**
 	 * Register for storage updates on the tables requested by web-gui
+     *
 	 * @param session		Session we are looking at
 	 * @param tableName		Tables that are associated with the session, to be registered
 	 * @return				Returns a HashMap that contains the sessions with their associated tables
@@ -130,11 +133,11 @@ public class WebSocketManager implements IStorageSourceListener, IFloodlightModu
 			storageSourceService.addListener(tableName, this);
 			logger.info("Added listener: "+ tableName);
 	
-			if(activeTables.containsKey(session)){
+			if (activeTables.containsKey(session)) {
 				tableNames = activeTables.get(session);
 				tableNames.add(tableName);
 				activeTables.put(session, tableNames);
-			}else {
+			} else {
 				tableNames.add(tableName);
 				activeTables.put(session, tableNames);
 			}
@@ -143,6 +146,7 @@ public class WebSocketManager implements IStorageSourceListener, IFloodlightModu
 			logger.error("Error in installing listener for "
 					+ "switch table {}");
 		}
+
 		return activeTables;
 	}
 	
@@ -150,8 +154,7 @@ public class WebSocketManager implements IStorageSourceListener, IFloodlightModu
 	/**
 	* Sets the IStorageSource to use for Topology
 	*
-	* @param storageSource
-	*            the storage source to use
+	* @param storageSourceService the storage source to use
 	*/
 	public void setStorageSource(IStorageSourceService storageSourceService) {
 		this.storageSourceService = storageSourceService;
@@ -169,34 +172,57 @@ public class WebSocketManager implements IStorageSourceListener, IFloodlightModu
 	@Override
 	public void rowsModified(String tableName, Set<Object> rowKeys) {
 			logger.debug("Table: " + tableName + " was modified");
-			readTableFromStorage(tableName);
+
+			for (Object key : rowKeys) {
+			    readTableFromStorage(tableName, key, false);
+            }
 	}
 
 	@Override
 	public void rowsDeleted(String tableName, Set<Object> rowKeys) {
 			logger.debug("Table: " + tableName + " had rows deleted");
-			readTableFromStorage(tableName);
+
+			for (Object key : rowKeys) {
+			    readTableFromStorage(tableName, key, true);
+            }
 	}
 	
 	/**
 	 * When a table is updated, a query is performed then the result 
 	 * is sent out over the websocket to the relevant session client
 	 * 
-	 * @param tableName
-	 * 			the name of the updated table to query
+	 * @param tableName The name of the updated table to query
+     * @param rowKey The primary key value of the row that was modified or deleted
+     * @param deleted True if the row was deleted, False otherwise
 	 */
-	protected void readTableFromStorage(String tableName) {
-		IResultSet tableResult = storageSourceService.executeQuery(tableName, null, null, null); 
-		if(tableResult.next()) {
+	protected void readTableFromStorage(String tableName, Object rowKey, boolean deleted) {
+		IResultSet tableResult = storageSourceService.getRow(tableName, rowKey);
+		if (tableResult.next()) {
 			logger.debug(tableResult.getRow().toString());
-		}else {
+		} else {
 			logger.debug("No row found!");
 			return;
 		}
-		
-		Session sess = getActiveSession().get(0); //Currently there is only ever one session active, however this code is here for future improvements
+
+        // Currently there is only ever one session active, however this code is here for future improvements
+		Session session = getActiveSession().get(0);
 		try {
-			sess.getRemote().sendString(tableResult.getRow().toString()); //Send table data out to client
+            // Unfortunately I can't think of a better way to convert all of the table objects
+            // from their object representation to string without adding each serializer we know we need
+            SimpleModule simpleModule = new SimpleModule();
+            simpleModule.addSerializer(DatapathId.class, new DPIDSerializer())
+                        .addSerializer(OFPort.class, new OFPortSerializer())
+			            .addSerializer(MacAddress.class, new MacSerializer())
+                        .addSerializer(U64.class, new U64Serializer())
+                        .addSerializer(EthType.class, new EthTypeSerializer());
+
+            // Send table data out to client
+            ObjectMapper mapper = new ObjectMapper().registerModule(simpleModule);
+            Map<String, Object> row = tableResult.getRow();
+            row.put(DELETED, deleted);
+            row.put(TABLE_NAME, tableName);
+            session.getRemote().sendString(mapper.writeValueAsString(row));
+
 		} catch (IOException e) {
 			logger.warn("Error sending updated table data to client");
 			logger.error(e.getLocalizedMessage());
@@ -206,31 +232,27 @@ public class WebSocketManager implements IStorageSourceListener, IFloodlightModu
 	/**
 	 * Method to keep track of active websocket sessions on server
 	 * 
-	 * @param session
-	 * 			session to add to list
+	 * @param session Session to add to list
 	 */
-	public void addActiveSession(Session session)
-	{
+	public void addActiveSession(Session session) {
 		this.sessions.add(session);
 		logger.info("Session has been added");
 	}
 	
 	/**
-	 * Removes active sessions from both the registered tables and the list that 
-	 * keeps track of current sessions. This makes sure that when you close the connection that we are not still listening
-	 * for irrelevant tables.
+	 * Removes active sessions from both the registered tables and the list that
+     * keeps track of current sessions. This makes sure that when you close the
+     * connection that we are not still listening for irrelevant tables.
 	 * 
-	 * @param session
-	 * 			Session that is being closed
+	 * @param session Session that is being closed
 	 */
-	public void removeActiveSession(Session session)
-	{
-		logger.info("removing listeners for: "+activeTables.get(session));
+	public void removeActiveSession(Session session) {
+		logger.info("Removing listeners for: "+activeTables.get(session));
 		if(activeTables.containsKey(session)) {
 			List<String> tablesToRemove = activeTables.get(session);
 			for(String table : tablesToRemove){
 				storageSourceService.removeListener(table, this); //remove the listeners when the connection is closed
-				logger.info("removed: " + table);
+				logger.info("Removed: " + table);
 			}
 		}
 		
@@ -239,8 +261,12 @@ public class WebSocketManager implements IStorageSourceListener, IFloodlightModu
 	    this.sessions.remove(session);
 	    logger.info("Session removed");
 	}
-	
-	//Return how many active sessions on websockets
+
+    /**
+     * Return how many active sessions on websockets
+     *
+     * @return List of active sessions
+     */
 	public List<Session> getActiveSession()
 	{
 		return this.sessions;

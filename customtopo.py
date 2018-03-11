@@ -4,10 +4,11 @@ from mininet.net import Mininet
 from mininet.node import RemoteController, OVSSwitch
 from mininet.cli import CLI
 from mininet.log import setLogLevel, info
+from mininet.link import TCLink
 
 def emptyNet():
 
-    net = Mininet( topo=None, build=False )
+    net = Mininet( topo=None, build=False, link=TCLink )
 
     info( '*** Adding controller\n' )
     net.addController('c0', controller=RemoteController,ip="127.0.0.1",port=6653)
@@ -17,6 +18,7 @@ def emptyNet():
     h1 = net.addHost( 'h1' )
     h2 = net.addHost( 'h2' )
     h3 = net.addHost( 'h3' )
+    h4 = net.addHost( 'h4' )
 
     info( '*** Adding switch\n' )
     s1 = net.addSwitch( 's1', cls=OVSSwitch )
@@ -32,19 +34,20 @@ def emptyNet():
     net.addLink( h1, s1 )
     net.addLink( h2, s2 )
     net.addLink( h3, s4 )
+    net.addLink( h4, s2 )
 
     ## switches
     switchList = (s1, s2, s3, s4)
     for index in range (0, len(switchList)):
       for index2 in range (index+1, len(switchList)):
-        net.addLink(switchList[index], switchList[index2])
+        net.addLink(switchList[index], switchList[index2], bw=10000)
 
     info( '*** Starting network\n')
     net.start()
 
     #info('*** Set ip address to switch\n')
 
-    #info('*** Enable spanning tree\n')                   
+    #info('*** Enable spanning tree\n')
     #s1.cmd('ovs-vsctl set bridge s1 stp-enable=true')
     #s2.cmd('ovs-vsctl set bridge s2 stp-enable=true')
     #s3.cmd('ovs-vsctl set bridge s3 stp-enable=true')
@@ -59,4 +62,3 @@ def emptyNet():
 if __name__ == '__main__':
     setLogLevel( 'info' )
     emptyNet()
-

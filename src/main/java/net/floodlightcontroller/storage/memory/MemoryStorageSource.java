@@ -115,7 +115,6 @@ public class MemoryStorageSource extends NoSqlStorageSource {
                 Object primaryKey = row.get(primaryKeyName);
                 if (primaryKey == null) {
                     if (primaryKeyName.equals(DEFAULT_PRIMARY_KEY_NAME)) {
-                        row = new HashMap<String,Object>(row);
                         primaryKey = table.getNextId();
                         row.put(primaryKeyName, primaryKey);
                     }

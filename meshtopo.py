@@ -24,18 +24,18 @@ class MyTopo( Topo ):
 	s4 = self.addSwitch( 's4' )
 
         # Add links between host and switches 
-	self.addLink( h1, s1, bw=150)
+	self.addLink( h1, s1)
 	self.addLink( h2, s2)
 	self.addLink( h3, s3)
 	self.addLink( h4, s4)
 
 	# Add the links between switches
-	self.addLink( s1, s2)
-	self.addLink( s1, s3)
-	self.addLink( s1, s4)
-	self.addLink( s2, s3)
-	self.addLink( s2, s4)
-	self.addLink( s3, s4)
+	self.addLink( s1, s2, bw=150)
+	self.addLink( s1, s3, bw=150)
+	self.addLink( s1, s4, bw=150)
+	self.addLink( s2, s3, bw=150)
+	self.addLink( s2, s4, bw=150)
+	self.addLink( s3, s4, bw=150)
 
 
 
