@@ -7,9 +7,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import net.floodlightcontroller.core.module.FloodlightModuleContext;
 import net.floodlightcontroller.core.module.IFloodlightService;
+import net.floodlightcontroller.perfmon.IPktInProcessingTimeService;
+import net.floodlightcontroller.storage.IStorageSourceCassandraService;
 import net.floodlightcontroller.storage.IStorageSourceService;
+import net.floodlightcontroller.storage.StorageException;
 import net.floodlightcontroller.storage.SynchronousExecutorService;
 import com.codahale.metrics.*;
 import com.google.common.util.concurrent.FutureFallback;
@@ -26,7 +32,9 @@ import com.datastax.driver.core.querybuilder.QueryBuilder;
 public class CassandraStorageSource extends NoSqlStorageSource {
 	private static Cluster cluster;
 	private static Session session;
-	
+	private static final Logger log = LoggerFactory.getLogger(CassandraStorageSource.class);
+
+	IPktInProcessingTimeService pktinProcessingTime;
 	//opens the connection to the DB
 	private static void openCassConnection(){
 		cluster = Cluster.builder().addContactPoint("127.0.0.1").withRetryPolicy(DefaultRetryPolicy.INSTANCE).
@@ -43,6 +51,7 @@ public class CassandraStorageSource extends NoSqlStorageSource {
 		openCassConnection();
 		
 		String a = "Drop table " + tableName;
+		
 		executeCommand(a);
 		
 		cluster.close();
@@ -59,8 +68,10 @@ public class CassandraStorageSource extends NoSqlStorageSource {
 		cluster.close();
 	}
 	//creates a table with primary key being the first column of type cls [must be string or int]
-	public static void createTable(String tableName, String primaryKeyName, Class<?> cls)
+	
+	public void createTable(String tableName, String primaryKeyName, Class<?> cls)
 	{
+		log.warn("MADE IT BITCH " + tableName);
 		openCassConnection();
 		
 		String a ="CREATE TABLE " +tableName+ " (" +primaryKeyName+ " " +cls+ ", PRIMARY KEY(" +primaryKeyName+ "))"; 
@@ -311,11 +322,38 @@ public class CassandraStorageSource extends NoSqlStorageSource {
 		}
 		cluster.close();
 	}
+	
+	public void setPktinProcessingTime(
+            IPktInProcessingTimeService pktinProcessingTime) {
+        this.pktinProcessingTime = pktinProcessingTime;
+    }
 
 	@Override
-	protected void updateRowsImpl(String tableName,
-			List<Map<String, Object>> rows) {
-		// TODO Auto-generated method stub
+	protected void updateRowsImpl(String tableName, List<Map<String, Object>> rows) {
+		openCassConnection();
+		
+		String primeKey = cluster.getMetadata().getKeyspace(session.getLoggedKeyspace())
+				.getTable(tableName).getPrimaryKey().get(0).getName();
+		
+		List<Object> values = new ArrayList<Object>();
+		List<String> names = new ArrayList<String>();
+		
+		
+		for(Map<String, Object> updateRow : rows){
+			Object rowKey = updateRow.get(primeKey);
+			if (rowKey == null)
+                throw new StorageException("Primary key not found.");
+			
+			int i = 0;
+			for(String column: names){
+			Statement exampleQuery = QueryBuilder.update(tableName).with(QueryBuilder.set(column, values.get(i)))
+			        .where(QueryBuilder.eq(primeKey, rowKey));
+			i++;
+			session.execute(exampleQuery);
+			}
+			cluster.close();
+			
+		}
 		
 	}
 
@@ -329,13 +367,13 @@ public class CassandraStorageSource extends NoSqlStorageSource {
 	
 	@Override
     public void startUp(FloodlightModuleContext context) {
-        super.startUp(context);
+        //super.startUp(context);
         executorService = new SynchronousExecutorService();
     }
 	
 	@Override
     public void init(FloodlightModuleContext context) throws net.floodlightcontroller.core.module.FloodlightModuleException {
-    	super.init(context);
+    	//super.init(context);
     };
     
     @Override

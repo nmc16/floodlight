@@ -313,7 +313,7 @@ IFloodlightModule {
 		floodlightProvider.addOFMessageListener(OFType.PACKET_IN, this);
 
 		// storage, create table and read rules
-		storageSource.createTable(TABLE_NAME, null);
+		storageSource.createTable(TABLE_NAME, null, null);
 		storageSource.setTablePrimaryKeyName(TABLE_NAME, COLUMN_RULEID);
 		this.rules = readRulesFromStorage();
 	}

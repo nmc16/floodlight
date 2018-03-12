@@ -689,13 +689,13 @@ public class Controller implements IFloodlightProviderService, IStorageSourceLis
         moduleLoaderState = ModuleLoaderState.STARTUP;
 
         // Create the table names we use
-        storageSourceService.createTable(CONTROLLER_TABLE_NAME, null);
-        storageSourceService.createTable(CONTROLLER_INTERFACE_TABLE_NAME, null);
-        storageSourceService.createTable(SWITCH_CONFIG_TABLE_NAME, null);
+        storageSourceService.createTable(CONTROLLER_TABLE_NAME, null, null);
+        storageSourceService.createTable(CONTROLLER_INTERFACE_TABLE_NAME, null, null);
+        storageSourceService.createTable(SWITCH_CONFIG_TABLE_NAME, null, null);
         storageSourceService.setTablePrimaryKeyName(CONTROLLER_TABLE_NAME, CONTROLLER_ID);
         storageSourceService.addListener(CONTROLLER_INTERFACE_TABLE_NAME, this);
 
-        storageSourceService.createTable(FLOW_PRIORITY_TABLE_NAME, null);
+        storageSourceService.createTable(FLOW_PRIORITY_TABLE_NAME, null, null);
         storageSourceService.setTablePrimaryKeyName(FLOW_PRIORITY_TABLE_NAME, FLOW_COLUMN_PRIMARY_KEY);
         storageSourceService.addListener(FLOW_PRIORITY_TABLE_NAME, this);
         readFlowPriorityConfigurationFromStorage(); // 

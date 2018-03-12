@@ -469,13 +469,13 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 	private void startStatisticsCollection() {
 		
 		// create the table for storing flow data 
-		storageService.createTable(TABLE_NAME, null);
+		storageService.createTable(TABLE_NAME, null, null);
 		storageService.setTablePrimaryKeyName(TABLE_NAME,DPID);
 		storageService.deleteMatchingRows(TABLE_NAME, null);
 		
 		
 		//create table for port stats
-		storageService.createTable(Port_TABLE_NAME, null);
+		storageService.createTable(Port_TABLE_NAME, null, null);
 		storageService.setTablePrimaryKeyName(Port_TABLE_NAME,Port_DPID);
 		storageService.deleteMatchingRows(Port_TABLE_NAME, null);
 		

@@ -844,7 +844,7 @@ implements IOFSwitchListener, IFloodlightModule, IStaticEntryPusherService, ISto
 		switchService.addOFSwitchListener(this);
 		floodlightProviderService.addHAListener(this.haListener);
 		// assumes no switches connected at startup()
-		storageSourceService.createTable(TABLE_NAME, null);
+		storageSourceService.createTable(TABLE_NAME, null, null);
 		storageSourceService.setTablePrimaryKeyName(TABLE_NAME, Columns.COLUMN_NAME);
 		storageSourceService.addListener(TABLE_NAME, this);
 		entriesFromStorage = readEntriesFromStorage();

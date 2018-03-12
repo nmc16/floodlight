@@ -97,7 +97,7 @@ public class PortModManager implements IFloodlightModule, IPortModService {
 		this.restService.addRestletRoutable(new PortModWebRoutable());
 
 		// Create our database table for current and old port modifications
-        this.storageService.createTable(TABLE_NAME, null);
+        this.storageService.createTable(TABLE_NAME, null, null);
 
 		// Tell the world we have loaded
 		LOG.info("Loaded module: Port modifications");

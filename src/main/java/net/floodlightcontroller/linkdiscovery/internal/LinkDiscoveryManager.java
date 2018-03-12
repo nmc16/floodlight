@@ -2033,12 +2033,12 @@ IFloodlightModule, IInfoProvider {
 			return;
 		}
 
-		storageSourceService.createTable(TOPOLOGY_TABLE_NAME, null);
+		storageSourceService.createTable(TOPOLOGY_TABLE_NAME, null, null);
 		storageSourceService.setTablePrimaryKeyName(TOPOLOGY_TABLE_NAME,
 				TOPOLOGY_ID);
 		readTopologyConfigFromStorage();
 
-		storageSourceService.createTable(LINK_TABLE_NAME, null);
+		storageSourceService.createTable(LINK_TABLE_NAME, null, null);
 		storageSourceService.setTablePrimaryKeyName(LINK_TABLE_NAME, LINK_ID);
 		storageSourceService.deleteMatchingRows(LINK_TABLE_NAME, null);
 		// Register for storage updates for the switch table
