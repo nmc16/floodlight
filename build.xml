@@ -74,7 +74,7 @@
         <include name="concurrentlinkedhashmap-lru-1.2.jar"/>
         <include name="jython-2.5.2.jar"/>
         <include name="libthrift-0.9.0.jar"/>
-        <include name="guava-13.0.1.jar" />
+        <include name="guava-14.0.1.jar" />
         <include name="findbugs-annotations-2.0.1.jar" />
         <include name="findbugs-jsr305-2.0.1.jar" />
         <include name="derby-10.9.1.0.jar"/>
@@ -100,6 +100,7 @@
     	<include name="jetty-client-9.4.8.v20171121.jar"/>
     	<include name="javax.servlet-api-3.1.0.jar"/>
     	<include name="cassandra-driver-core-2.1.9.jar"/>
+    	<include name="metrics-core-3.0.2.jar"/>
     </patternset>
 
     <path id="classpath">

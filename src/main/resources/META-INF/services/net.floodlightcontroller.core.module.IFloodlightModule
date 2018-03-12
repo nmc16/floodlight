@@ -1,5 +1,4 @@
 net.floodlightcontroller.core.internal.FloodlightProvider
-net.floodlightcontroller.storage.memory.MemoryStorageSource
 net.floodlightcontroller.flowcache.FlowReconcileManager
 net.floodlightcontroller.hub.Hub
 net.floodlightcontroller.jython.JythonDebugInterface

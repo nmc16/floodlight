@@ -401,6 +401,7 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 		threadPoolService = context.getServiceImpl(IThreadPoolService.class);
 		restApiService = context.getServiceImpl(IRestApiService.class);
 		storageService = context.getServiceImpl(IStorageSourceService.class);
+		//storageService = context.getServiceImpl(IStorageSourceService.class);
 
 		Map<String, String> config = context.getConfigParams(this);
 		if (config.containsKey(ENABLED_STR)) {

@@ -9,9 +9,10 @@ import java.util.Set;
 
 import net.floodlightcontroller.core.module.FloodlightModuleContext;
 import net.floodlightcontroller.core.module.IFloodlightService;
-import net.floodlightcontroller.storage.IStorageSourceCassandraService;
+import net.floodlightcontroller.storage.IStorageSourceService;
 import net.floodlightcontroller.storage.SynchronousExecutorService;
-
+import com.codahale.metrics.*;
+import com.google.common.util.concurrent.FutureFallback;
 import com.datastax.driver.core.Cluster;
 import com.datastax.driver.core.ResultSet;
 import com.datastax.driver.core.Row;
@@ -30,7 +31,7 @@ public class CassandraStorageSource extends NoSqlStorageSource {
 	private static void openCassConnection(){
 		cluster = Cluster.builder().addContactPoint("127.0.0.1").withRetryPolicy(DefaultRetryPolicy.INSTANCE).
 			withLoadBalancingPolicy(new TokenAwarePolicy(new DCAwareRoundRobinPolicy())).build();
-		session = cluster.connect("NameOfKeysapace");
+		session = cluster.connect("testdatabase");
 	}
 	
 	//executes the CQL commands
@@ -344,7 +345,7 @@ public class CassandraStorageSource extends NoSqlStorageSource {
             IFloodlightService> m =
                 new HashMap<Class<? extends IFloodlightService>,
                             IFloodlightService>();
-        m.put(IStorageSourceCassandraService.class, this);
+        m.put(IStorageSourceService.class, this);
         return m;
     }
 
