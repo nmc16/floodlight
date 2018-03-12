@@ -8,53 +8,57 @@ from mininet.link import TCLink
 
 def emptyNet():
 
-    net = Mininet( topo=None, build=False, link=TCLink )
+    net = Mininet(topo=None, build=False, link=TCLink)
 
     info( '*** Adding controller\n' )
     net.addController('c0', controller=RemoteController,ip="127.0.0.1",port=6653)
-    h0 = net.addHost('h0')
 
     info( '*** Adding hosts\n' )
-    h1 = net.addHost( 'h1' )
-    h2 = net.addHost( 'h2' )
-    h3 = net.addHost( 'h3' )
-    h4 = net.addHost( 'h4' )
+    h1 = net.addHost('h1')
+    h2 = net.addHost('h2')
+    h3 = net.addHost('h3')
+    h4 = net.addHost('h4')
+    h5 = net.addHost('h5')
+    h6 = net.addHost('h6')
+    h7 = net.addHost('h7')
+    h8 = net.addHost('h8')
 
     info( '*** Adding switch\n' )
-    s1 = net.addSwitch( 's1', cls=OVSSwitch )
-    s2 = net.addSwitch( 's2', cls=OVSSwitch )
-    s3 = net.addSwitch( 's3', cls=OVSSwitch )
-    s4 = net.addSwitch( 's4', cls=OVSSwitch )
+    s1 = net.addSwitch('s1', cls=OVSSwitch)
+    s2 = net.addSwitch('s2', cls=OVSSwitch)
+    s3 = net.addSwitch('s3', cls=OVSSwitch)
+    s4 = net.addSwitch('s4', cls=OVSSwitch)
+    s5 = net.addSwitch('s5', cls=OVSSwitch)
+    s6 = net.addSwitch('s6', cls=OVSSwitch)
+    s7 = net.addSwitch('s7', cls=OVSSwitch)
 
     info( '*** Creating links\n' )
-    ## controller - switch (s4)
-    net.addLink( h0, s3 )
 
     ## host - switch
-    net.addLink( h1, s1 )
-    net.addLink( h2, s2 )
-    net.addLink( h3, s4 )
-    net.addLink( h4, s2 )
+    net.addLink(h1, s3)
+    net.addLink(h2, s3)
+    net.addLink(h3, s4)
+    net.addLink(h4, s4)
+    net.addLink(h5, s6)
+    net.addLink(h6, s6)
+    net.addLink(h7, s7)
+    net.addLink(h8, s7)
 
     ## switches
-    switchList = (s1, s2, s3, s4)
-    for index in range (0, len(switchList)):
-      for index2 in range (index+1, len(switchList)):
-        net.addLink(switchList[index], switchList[index2], bw=10000)
+    net.addLink(s1, s2)
+    net.addLink(s2, s3)
+    net.addLink(s2, s4)
+    net.addLink(s3, s4)
+    net.addLink(s1, s5)
+    net.addLink(s5, s7)
+    net.addLink(s5, s6)
+    net.addLink(s6, s7)
 
     info( '*** Starting network\n')
     net.start()
 
-    #info('*** Set ip address to switch\n')
-
-    #info('*** Enable spanning tree\n')
-    #s1.cmd('ovs-vsctl set bridge s1 stp-enable=true')
-    #s2.cmd('ovs-vsctl set bridge s2 stp-enable=true')
-    #s3.cmd('ovs-vsctl set bridge s3 stp-enable=true')
-    #s4.cmd('ovs-vsctl set bridge s4 stp-enable=true')
-
     info( '*** Running CLI\n' )
-    CLI( net )
+    CLI(net)
 
     info( '*** Stopping network' )
     net.stop()
