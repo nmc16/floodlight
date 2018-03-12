@@ -9,7 +9,9 @@ import java.util.Set;
 
 import net.floodlightcontroller.core.module.FloodlightModuleContext;
 import net.floodlightcontroller.core.module.IFloodlightService;
-import net.floodlightcontroller.storage.IStorageSourceService;
+import net.floodlightcontroller.perfmon.IPktInProcessingTimeService;
+import net.floodlightcontroller.storage.IStorageSourceCassandraService;
+
 import net.floodlightcontroller.storage.SynchronousExecutorService;
 import com.codahale.metrics.*;
 import com.google.common.util.concurrent.FutureFallback;
@@ -26,7 +28,7 @@ import com.datastax.driver.core.querybuilder.QueryBuilder;
 public class CassandraStorageSource extends NoSqlStorageSource {
 	private static Cluster cluster;
 	private static Session session;
-	
+	IPktInProcessingTimeService pktinProcessingTime;
 	//opens the connection to the DB
 	private static void openCassConnection(){
 		cluster = Cluster.builder().addContactPoint("127.0.0.1").withRetryPolicy(DefaultRetryPolicy.INSTANCE).
@@ -37,6 +39,11 @@ public class CassandraStorageSource extends NoSqlStorageSource {
 	//executes the CQL commands
 	private static void executeCommand(String cmd){
 		session.execute(cmd);
+	}
+
+	public void setPktinProcessingTime(
+	    IPktInProcessingTimeService pktinProcessingTime) {
+	    this.pktinProcessingTime = pktinProcessingTime;
 	}
 	
 	public static void deleteTable(String tableName){
@@ -58,8 +65,8 @@ public class CassandraStorageSource extends NoSqlStorageSource {
 		
 		cluster.close();
 	}
-	//creates a table with primary key being the first column of type cls [must be string or int]
-	public static void createTable(String tableName, String primaryKeyName, Class<?> cls)
+	//creates a table with primary key being the first column of type cls [must be string or int] 
+	public void createTable(String tableName, String primaryKeyName, Class<?> cls)
 	{
 		openCassConnection();
 		
@@ -337,7 +344,14 @@ public class CassandraStorageSource extends NoSqlStorageSource {
     public void init(FloodlightModuleContext context) throws net.floodlightcontroller.core.module.FloodlightModuleException {
     	super.init(context);
     };
-    
+    @Override
+    public Collection<Class<? extends IFloodlightService>> getModuleServices() {
+		Collection<Class<? extends IFloodlightService>> l = 
+				new ArrayList<Class<? extends IFloodlightService>>();
+		l.add(IStorageSourceCassandraService.class);
+		return l;
+	}
+
     @Override
     public Map<Class<? extends IFloodlightService>,
                IFloodlightService> getServiceImpls() {
@@ -345,7 +359,7 @@ public class CassandraStorageSource extends NoSqlStorageSource {
             IFloodlightService> m =
                 new HashMap<Class<? extends IFloodlightService>,
                             IFloodlightService>();
-        m.put(IStorageSourceService.class, this);
+        m.put(IStorageSourceCassandraService.class, this);
         return m;
     }
 

@@ -114,7 +114,7 @@ public class Controller implements IFloodlightProviderService, IStorageSourceLis
     private static IThreadPoolService threadPoolService;
     private static ISyncService syncService;
     private static IShutdownService shutdownService;
-
+    
     /*
      * The id for this controller node. Should be unique for each controller
      * node in a controller cluster.
@@ -227,7 +227,7 @@ public class Controller implements IFloodlightProviderService, IStorageSourceLis
     IStorageSourceService getStorageSourceService() {
         return storageSourceService;
     }
-    
+     
     IShutdownService getShutdownService() {
     	return shutdownService;
     }

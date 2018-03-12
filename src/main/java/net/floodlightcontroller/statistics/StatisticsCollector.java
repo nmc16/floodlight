@@ -14,6 +14,7 @@ import net.floodlightcontroller.restserver.IRestApiService;
 import net.floodlightcontroller.statistics.web.SwitchStatisticsWebRoutable;
 import net.floodlightcontroller.storage.CompoundPredicate;
 import net.floodlightcontroller.storage.IResultSet;
+import net.floodlightcontroller.storage.IStorageSourceCassandraService;
 import net.floodlightcontroller.storage.IStorageSourceService;
 import net.floodlightcontroller.storage.OperatorPredicate;
 import net.floodlightcontroller.threadpool.IThreadPoolService;
@@ -46,6 +47,7 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 	private static IThreadPoolService threadPoolService;
 	private static IRestApiService restApiService;
 	private static IStorageSourceService storageService;
+	private static IStorageSourceCassandraService storageCQL;
 
 	private static boolean isEnabled = false;
 	private static boolean debug = false;
@@ -391,6 +393,7 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 		l.add(IThreadPoolService.class);
 		l.add(IRestApiService.class);
 		l.add(IStorageSourceService.class);
+		l.add(IStorageSourceCassandraService.class);
 		return l;
 	}
 
@@ -401,7 +404,7 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 		threadPoolService = context.getServiceImpl(IThreadPoolService.class);
 		restApiService = context.getServiceImpl(IRestApiService.class);
 		storageService = context.getServiceImpl(IStorageSourceService.class);
-		//storageService = context.getServiceImpl(IStorageSourceService.class);
+		storageCQL = context.getServiceImpl(IStorageSourceCassandraService.class);
 
 		Map<String, String> config = context.getConfigParams(this);
 		if (config.containsKey(ENABLED_STR)) {
@@ -470,6 +473,7 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 		
 		// create the table for storing flow data 
 		storageService.createTable(TABLE_NAME, null);
+		storageCQL.createTable("STATS YO", "statistics", String.class);
 		storageService.setTablePrimaryKeyName(TABLE_NAME,DPID);
 		storageService.deleteMatchingRows(TABLE_NAME, null);
 		
