@@ -29,3 +29,5 @@ net.floodlightcontroller.learningswitch.LearningSwitch
 net.floodlightcontroller.statistics.StatisticsCollector
 net.floodlightcontroller.routing.RoutingManager
 net.floodlightcontroller.cpanalyzer.CPAnalyzer
+net.floodlightcontroller.portmod.PortModManager
+net.floodlightcontroller.websocket.WebSocketManager

@@ -32,6 +32,7 @@ import net.floodlightcontroller.linkdiscovery.Link;
 import net.floodlightcontroller.packet.BSN;
 import net.floodlightcontroller.packet.Ethernet;
 import net.floodlightcontroller.packet.LLDP;
+import net.floodlightcontroller.portmod.IPortModService;
 import net.floodlightcontroller.restserver.IRestApiService;
 import net.floodlightcontroller.routing.IRoutingService.PATH_METRIC;
 import net.floodlightcontroller.routing.web.RoutingWebRoutable;
@@ -51,10 +52,7 @@ import org.slf4j.LoggerFactory;
 import com.google.common.collect.ImmutableSet;
 
 import java.util.*;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 /**
  * Topology manager is responsible for maintaining the controller's notion
@@ -110,6 +108,7 @@ ITopologyManagerBackend, ILinkDiscoveryListener, IOFMessageListener {
     protected static IRestApiService restApiService;
     protected static IDebugCounterService debugCounterService;
     protected static IStatisticsService statisticsService;
+    protected static IPortModService portModService;
 
     // Modules that listen to our updates
     protected ArrayList<ITopologyListener> topologyAware;
@@ -146,6 +145,11 @@ ITopologyManagerBackend, ILinkDiscoveryListener, IOFMessageListener {
      */
     protected static final String PACKAGE = TopologyManager.class.getPackage().getName();
     protected IDebugCounter ctrIncoming;
+
+    /**
+     * Timeout to wait on port modification futures to finish executing
+     */
+    private static final int FUTURE_TIMEOUT = 1000;
 
     //  Getter/Setter methods
     /**
@@ -455,6 +459,106 @@ ITopologyManagerBackend, ILinkDiscoveryListener, IOFMessageListener {
     }
 
     @Override
+    public boolean blockLink(Link link) {
+
+        // Tell the switches to stop traffic over the ports
+        boolean ret;
+        if ((ret = changeLink(link, true))) {
+            // If the operation passed we can add the ports to the blocked list
+            NodePortTuple src = new NodePortTuple(link.getSrc(), link.getSrcPort());
+            NodePortTuple dst = new NodePortTuple(link.getDst(), link.getDstPort());
+
+            Set<NodePortTuple> nodes = getCurrentInstance().getBlockedPorts();
+            nodes.add(src);
+            nodes.add(dst);
+            // TODO: Remove
+            log.info("Blocked port list: " + getCurrentInstance().getBlockedPorts());
+
+            // We can also add the link to the blocked links list
+            getCurrentInstance().getBlockedLinks().add(link);
+            log.info("Blocked link list: " + getCurrentInstance().getBlockedLinks());
+        }
+
+        // Return the result of the port modification request
+        return ret;
+    }
+
+    @Override
+    public boolean unblockLink(Link link) {
+
+        // Tell the switches to allow traffic over the ports
+        boolean ret;
+        if ((ret = changeLink(link, false))) {
+            // If the operation passed we can remove the ports to the blocked list
+            NodePortTuple src = new NodePortTuple(link.getSrc(), link.getSrcPort());
+            NodePortTuple dst = new NodePortTuple(link.getDst(), link.getDstPort());
+
+            Set<NodePortTuple> nodes = getCurrentInstance().getBlockedPorts();
+            nodes.remove(src);
+            nodes.remove(dst);
+
+            // We can also add the link to the blocked links list
+            getCurrentInstance().getBlockedLinks().remove(link);
+        }
+
+        // Return the result of the port modification request
+        return ret;
+    }
+
+    /**
+     * Helper function to block or unblock a link.
+     *
+     * TODO: Need to deal with failure case.
+     *
+     * @param link Link to block or unblock
+     * @param block True if the link should be blocked, false otherwise
+     * @return True if the operation was successful, false otherwise
+     */
+    private boolean changeLink(Link link, boolean block) {
+
+        // Send port modifications at same time to reduce waiting time
+        ArrayList<Future<OFPortMod>> futures = new ArrayList<>();
+        futures.add(portModService.createPortModAsync(link.getSrc(), link.getSrcPort(), OFPortConfig.PORT_DOWN, block));
+        futures.add(portModService.createPortModAsync(link.getDst(), link.getDstPort(), OFPortConfig.PORT_DOWN, block));
+
+        // Now loop over the futures and get the results
+        /* TODO: How are we actually going to handle failure here? For example if only one port modification is
+         * TODO: successful how do we revert state? For now we don't care but should be looked at */
+        for (Future<OFPortMod> future : futures) {
+            try {
+                // We don't care about the return, just that it finished successfully
+                future.get(FUTURE_TIMEOUT, TimeUnit.MILLISECONDS);
+
+            } catch (InterruptedException e) {
+                log.error("Port modification was interrupted while executing: " + e.getLocalizedMessage());
+                return false;
+
+            } catch (TimeoutException e) {
+                log.error("Port modification timed-out: " + e.getLocalizedMessage());
+                return false;
+
+            } catch (ExecutionException e) {
+                log.error("Port modification threw an error while executing: " + e.getCause().getLocalizedMessage());
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    @Override
+    public Set<Link> getBlockedLinks() {
+        Set<Link> blockedLinks = new HashSet<>();
+        Set<Link> instanceLinks = getCurrentInstance().getBlockedLinks();
+
+        if (instanceLinks != null) {
+            blockedLinks.addAll(instanceLinks);
+        }
+
+        return blockedLinks;
+    }
+
+    @Override
     public Set<NodePortTuple> getTunnelPorts() {
         return tunnelPorts;
     }
@@ -601,6 +705,7 @@ ITopologyManagerBackend, ILinkDiscoveryListener, IOFMessageListener {
         restApiService = context.getServiceImpl(IRestApiService.class);
         debugCounterService = context.getServiceImpl(IDebugCounterService.class);
         statisticsService = context.getServiceImpl(IStatisticsService.class);
+        portModService = context.getServiceImpl(IPortModService.class);
 
         switchPorts = new HashMap<DatapathId, Set<OFPort>>();
         switchPortLinks = new HashMap<NodePortTuple, Set<Link>>();
@@ -791,7 +896,7 @@ ITopologyManagerBackend, ILinkDiscoveryListener, IOFMessageListener {
      * openflowdomain.  Get all the switches in the same openflow
      * domain as the sw (disabling tunnels).  Then get all the
      * external switch ports and send these packets out.
-     * @param sw
+     * @param pinSwitch
      * @param pi
      * @param cntx
      */
@@ -956,10 +1061,17 @@ ITopologyManagerBackend, ILinkDiscoveryListener, IOFMessageListener {
      * topology was created or not.
      */
     protected boolean createNewInstance(String reason, boolean forced) {
-        Set<NodePortTuple> blockedPorts = new HashSet<NodePortTuple>();
 
         if (!linksUpdated && !forced) {
             return false;
+        }
+
+        // We want to preserve the lists of blocked ports across new topologies
+        Set<NodePortTuple> blockedPorts = new HashSet<NodePortTuple>();
+        Set<Link> blockedLinks = new HashSet<>();
+        if (currentInstance != null) {
+            blockedPorts = currentInstance.getBlockedPorts();
+            blockedLinks = currentInstance.getBlockedLinks();
         }
 
         Map<NodePortTuple, Set<Link>> openflowLinks;
@@ -1004,6 +1116,7 @@ ITopologyManagerBackend, ILinkDiscoveryListener, IOFMessageListener {
 
         TopologyInstance nt = new TopologyInstance(switchPorts,
                 blockedPorts,
+                blockedLinks,
                 openflowLinks,
                 broadcastDomainPorts,
                 tunnelPorts,

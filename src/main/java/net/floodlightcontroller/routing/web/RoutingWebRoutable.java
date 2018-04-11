@@ -32,6 +32,7 @@ public class RoutingWebRoutable implements RestletRoutable {
     public Router getRestlet(Context context) {
         Router router = new Router(context);
         router.attach("/path/{src-dpid}/{src-port}/{dst-dpid}/{dst-port}/json", PathResource.class);
+        router.attach("/path/flow/{src-dpid}/{eth-src}/{eth-dst}/{eth-type}/json", PathFlowResource.class);
         router.attach("/paths/{src-dpid}/{dst-dpid}/{num-paths}/json", PathsResource.class);
         router.attach("/paths/fast/{src-dpid}/{dst-dpid}/{num-paths}/json", PathsResource.class);
         router.attach("/paths/slow/{src-dpid}/{dst-dpid}/{num-paths}/json", PathsResource.class);

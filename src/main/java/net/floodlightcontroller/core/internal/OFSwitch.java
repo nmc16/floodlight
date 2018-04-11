@@ -447,8 +447,16 @@ public class OFSwitch implements IOFSwitchBackend {
 							|| prevPort.getConfig().contains(OFPortConfig.PORT_DOWN)) 
 							&& (!newPort.getState().contains(OFPortState.LINK_DOWN) 
 									&& !newPort.getConfig().contains(OFPortConfig.PORT_DOWN))) {
-						events.add(new PortChangeEvent(newPort,
-								PortChangeType.UP));
+                        events.add(new PortChangeEvent(newPort,
+                                PortChangeType.UP));
+                    } else if (!prevPort.getConfig().contains(OFPortConfig.NO_RECV) &&
+                               newPort.getConfig().contains(OFPortConfig.NO_RECV)) {
+                        events.add(new PortChangeEvent(newPort, PortChangeType.INACTIVE));
+
+                    } else if (!prevPort.getConfig().contains(OFPortConfig.NO_RECV) &&
+                               newPort.getConfig().contains(OFPortConfig.NO_RECV)) {
+					    events.add(new PortChangeEvent(newPort, PortChangeType.ACTIVE));
+
 					} else {
 						events.add(new PortChangeEvent(newPort,
 								PortChangeType.OTHER_UPDATE));
